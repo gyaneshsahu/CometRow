@@ -1,0 +1,92 @@
+PASS 320px: no horizontal section overflow
+PASS 320px: long heading preserves all copy
+PASS 320px: long paragraph auto-grows
+PASS 320px: 200% button text remains usable
+PASS 320px: overlap warning
+PASS 360px: no horizontal section overflow
+PASS 360px: long heading preserves all copy
+PASS 360px: long paragraph auto-grows
+PASS 360px: 200% button text remains usable
+PASS 360px: overlap warning
+PASS 390px: no horizontal section overflow
+PASS 390px: long heading preserves all copy
+PASS 390px: long paragraph auto-grows
+PASS 390px: 200% button text remains usable
+PASS 390px: overlap warning
+PASS 430px: no horizontal section overflow
+PASS 430px: long heading preserves all copy
+PASS 430px: long paragraph auto-grows
+PASS 430px: 200% button text remains usable
+PASS 430px: overlap warning
+PASS 639px: no horizontal section overflow
+PASS 639px: long heading preserves all copy
+PASS 639px: long paragraph auto-grows
+PASS 639px: 200% button text remains usable
+PASS 639px: overlap warning
+PASS 640px: no horizontal section overflow
+PASS 640px: long heading preserves all copy
+PASS 640px: long paragraph auto-grows
+PASS 640px: 200% button text remains usable
+PASS 640px: overlap warning
+PASS 768px: no horizontal section overflow
+PASS 768px: long heading preserves all copy
+PASS 768px: long paragraph auto-grows
+PASS 768px: 200% button text remains usable
+PASS 768px: overlap warning
+PASS 1023px: no horizontal section overflow
+PASS 1023px: long heading preserves all copy
+PASS 1023px: long paragraph auto-grows
+PASS 1023px: 200% button text remains usable
+PASS 1023px: overlap warning
+PASS 1024px: no horizontal section overflow
+PASS 1024px: long heading preserves all copy
+PASS 1024px: long paragraph auto-grows
+PASS 1024px: 200% button text remains usable
+PASS 1024px: overlap warning
+PASS 1200px: no horizontal section overflow
+PASS 1200px: long heading preserves all copy
+PASS 1200px: long paragraph auto-grows
+PASS 1200px: 200% button text remains usable
+PASS 1200px: overlap warning
+PASS 1440px: no horizontal section overflow
+PASS 1440px: long heading preserves all copy
+PASS 1440px: long paragraph auto-grows
+PASS 1440px: 200% button text remains usable
+PASS 1440px: overlap warning
+PASS mobile: DOM reading order
+PASS tablet: DOM reading order
+PASS desktop: DOM reading order
+PASS JSON sample round-trip
+PASS mobile: 50 mixed DOM nodes
+PASS tablet: 50 mixed DOM nodes
+PASS desktop: 50 mixed DOM nodes
+INFO 50-node three-surface render: 21 ms
+PASS background lock removes pointer target
+PASS background fills hero with cover
+PASS focal point changes crop
+PASS detach undo redo undo coherent
+PASS heading editable and semantic
+PASS paragraph auto height grows
+PASS button URL uses real anchor
+PASS mobile full-width button
+PASS mobile/tablet leave desktop untouched
+PASS mobile leaves tablet untouched
+PASS all-breakpoint style propagated
+PASS picker cancel removes temporary state
+PASS IndexedDB reload preserves content
+PASS three read-only thumbnails
+PASS single editable canvas
+PASS preview has no editing overlays
+PASS no browser errors during scripted founder flow
+PASS 50-node editor remains rendered
+PASS 50-node editor selection and inspector respond
+PASS 50-node live thumbnails remain present
+INFO 46 UI additions plus move and breakpoint switches: 5484 ms
+PASS debounced autosave contains all 50 nodes
+PASS manual edits persist map origins
+PASS reload preserves complete document, maps, styles, bands and locks
+PASS bundled video decodes locally
+PASS corrupt record falls back with recovery notice
+PASS recoverable corrupt record is retained
+
+PASS: 88 assertions. Pointer capture and file chooser are verified separately with real browser input.

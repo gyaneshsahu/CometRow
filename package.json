@@ -1,0 +1,59 @@
+{
+  "name": "cometrow",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0 <25"
+  },
+  "scripts": {
+    "mail": "tsx scripts/mail.ts",
+    "demo": "tsx scripts/demo.ts",
+    "workspace:transfer": "tsx scripts/transfer-owner.ts",
+    "auth:cleanup": "tsx scripts/cleanup-auth.ts",
+    "setup": "tsx scripts/local.ts",
+    "dev": "tsx watch src/server.ts",
+    "services:start": "docker compose up -d --wait",
+    "services:stop": "docker compose stop",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:seed": "tsx scripts/seed.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "tsx --test tests/*.test.ts",
+    "test:integration": "tsx --test tests/integration/*.test.ts",
+    "build": "tsc -p tsconfig.build.json && npm run build:client",
+    "start": "node dist/src/server.js",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:integration && npm run build",
+    "build:client": "tsx scripts/build-client.ts",
+    "presetup": "npm run build:client",
+    "predev": "npm run build:client",
+    "demo:composer": "tsx scripts/demo-composer.ts",
+    "editor:lab": "tsx scripts/editor-p0.ts",
+    "test:editor-lab": "tsx --test docs/prototypes/editor-p0/lab-*.test.ts",
+    "typecheck:editor-lab": "tsc -p docs/prototypes/editor-p0/tsconfig.lab.json"
+  },
+  "dependencies": {
+    "@fastify/cookie": "11.1.2",
+    "@fastify/formbody": "8.0.2",
+    "@fastify/helmet": "13.1.1",
+    "@fastify/rate-limit": "10.3.0",
+    "fastify": "5.12.5",
+    "pg": "8.23.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.13.6",
+    "@types/pg": "8.23.1",
+    "ajv": "8.20.0",
+    "embedded-postgres": "18.4.0-beta.17",
+    "esbuild": "0.28.2",
+    "eslint": "10.11.0",
+    "prettier": "3.9.8",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.70.0"
+  }
+}

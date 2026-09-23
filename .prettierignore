@@ -1,0 +1,12 @@
+node_modules
+dist
+.local
+package-lock.json
+cometrow-spec
+00_START_HERE_FOR_ASTRA.md
+*.zip
+## Preserve the founder-authored source specification verbatim.
+docs/COMETROW_CAMPAIGN_EDITOR_PRODUCT_SPEC.md
+## Preserve the founder-authored Editor Lab contract verbatim.
+docs/editor-lab/ASTRA_EDITOR_LAB_BUILD_SPEC.md
+docs/editor-lab/cometrow-editor-lab.schema.json
