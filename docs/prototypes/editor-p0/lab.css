@@ -344,3 +344,24 @@ summary {
 .lab-node {
   max-width: 100%;
 }
+.lab-rail-card {
+  margin-bottom: 14px;
+}
+.lab-rail-card .lab-thumbnail {
+  margin-bottom: 4px;
+}
+.lab-rail-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--muted);
+}
+.lab-rail-badges strong {
+  color: var(--accent);
+}
+.lab-rail-card > button {
+  width: 100%;
+  margin-top: 4px;
+  font-size: 11px;
+}

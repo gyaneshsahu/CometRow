@@ -11,9 +11,12 @@ test('independent commands, history, protected generation, background and semant
     placement: placement('image'),
     device: 'desktop',
   });
-  const mobile = structuredClone(h.document.sections[0]!.layouts.mobile);
   h.commit({ type: 'SetImageAsBackground', id: n.id, device: 'desktop' });
-  assert.deepEqual(h.document.sections[0]!.layouts.mobile, mobile);
+  const mobile = h.document.sections[0]!.layouts.mobile.placements[n.id]!;
+  assert.equal(mobile.sectionBackground, true);
+  assert.equal(mobile.layerBand, 'background');
+  assert.equal(mobile.w, 480);
+  assert.equal(mobile.locked, true);
   const p = h.document.sections[0]!.layouts.desktop.placements[n.id]!;
   assert.equal(p.w, 480);
   assert.equal(p.locked, true);
@@ -31,9 +34,9 @@ test('independent commands, history, protected generation, background and semant
   h.undo();
   assert.throws(() =>
     h.commit({
-      type: 'ApplyGeneratedBreakpointLayout',
+      type: 'ResetNodeToAuto',
       device: 'desktop',
-      from: 'mobile',
+      id: n.id,
     }),
   );
   const reading = structuredClone(h.document.sections[0]!.readingOrder);
@@ -62,10 +65,13 @@ test('independent commands, history, protected generation, background and semant
     undefined,
   );
   h.commit({
-    type: 'ResetBreakpointLayout',
-    device: 'desktop',
-    from: 'mobile',
+    type: 'SetPrimaryScreen',
+    device: 'mobile',
     confirmed: true,
   });
-  assert.equal(h.document.sections[0]!.layouts.desktop.origin, 'generated');
+  assert.equal(h.document.primaryScreen, 'mobile');
+  assert.equal(
+    h.document.sections[0]!.layouts.desktop.placements[n.id]!.geometryMode,
+    'custom',
+  );
 });

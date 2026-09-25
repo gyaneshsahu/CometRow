@@ -31,6 +31,7 @@ export type Height =
   | { mode: 'fixed'; px: number }
   | { mode: 'aspect'; ratio: number };
 export type Placement = {
+  geometryMode?: 'auto' | 'custom';
   x: number;
   yPx: number;
   w: number;
@@ -86,7 +87,18 @@ export type Layout = {
   generatedFrom?: Device | null;
   placements: Record<string, Placement>;
 };
+export type ResponsiveGroup = {
+  id: string;
+  name: string;
+  layout: 'row' | 'stack' | 'overlay';
+  children: string[];
+};
+export type ResponsiveRelationships = {
+  groups: ResponsiveGroup[];
+  roles: Record<string, 'content' | 'decoration'>;
+};
 export type LabDocument = {
+  primaryScreen?: Device;
   schemaVersion: 'editor-lab/1';
   documentId: string;
   name: string;
@@ -107,6 +119,7 @@ export type LabDocument = {
     childIds: string[];
     readingOrder: string[];
     bottomPaddingPx?: number;
+    responsive?: ResponsiveRelationships;
     layouts: Record<Device, Layout>;
   }[];
   nodes: Record<string, LabNode>;
@@ -279,6 +292,36 @@ export function validate(value: unknown): asserts value is LabDocument {
     !same(s.childIds, s.readingOrder)
   )
     throw Error('Reading order / node membership mismatch');
+  if (s.responsive) {
+    const groups = new Map(s.responsive.groups.map((g) => [g.id, g]));
+    if (groups.size !== s.responsive.groups.length)
+      throw Error('Duplicate responsive group');
+    const owners = new Set<string>();
+    for (const g of groups.values()) {
+      if (d.nodes[g.id]) throw Error('Responsive group conflicts with node');
+      for (const id of g.children) {
+        if (!d.nodes[id] && !groups.has(id))
+          throw Error('Unknown responsive member');
+        if (owners.has(id))
+          throw Error('Responsive member belongs to two groups');
+        owners.add(id);
+      }
+    }
+    const visit = (id: string, path: Set<string>) => {
+      if (path.has(id)) throw Error('Responsive group cycle');
+      const g = groups.get(id);
+      if (g)
+        for (const child of g.children) visit(child, new Set([...path, id]));
+    };
+    for (const id of groups.keys()) visit(id, new Set());
+    for (const id of Object.keys(s.responsive.roles))
+      if (!d.nodes[id]) throw Error('Unknown responsive role');
+      else if (
+        d.nodes[id]!.type === 'button' &&
+        s.responsive.roles[id] === 'decoration'
+      )
+        throw Error('Buttons remain interactive content');
+  }
   for (const [id, a] of Object.entries(d.assets)) {
     if (id !== a.id) throw Error('Asset ID mismatch');
     if (
@@ -334,6 +377,32 @@ export function validate(value: unknown): asserts value is LabDocument {
         throw Error('Buttons require interactive band');
     }
   }
+}
+// Legacy and partially annotated designs are protected, never inferred as Auto.
+export function normalizeDocument(value: unknown): LabDocument {
+  validate(value);
+  const d = structuredClone(value);
+  const legacy = !d.primaryScreen;
+  d.primaryScreen ??= 'desktop';
+  for (const section of d.sections)
+    for (const b of devices)
+      for (const p of Object.values(section.layouts[b].placements)) {
+        if (legacy) p.geometryMode = 'custom';
+        else p.geometryMode ??= 'custom';
+      }
+  return d;
+}
+export const primaryScreen = (d: LabDocument): Device =>
+  d.primaryScreen ?? 'desktop';
+export function geometryState(d: LabDocument, id: string, b: Device) {
+  const p = d.sections[0]!.layouts[b].placements[id]!;
+  return p.hidden
+    ? 'Hidden'
+    : b === primaryScreen(d)
+      ? 'Primary'
+      : p.geometryMode === 'auto'
+        ? 'Auto'
+        : 'Custom';
 }
 export function validateFile(file: { type: string; size: number }) {
   if (
@@ -413,6 +482,7 @@ export function placement(type: Kind, x = 120, yPx = 120): Placement {
 }
 export function seed(): LabDocument {
   return {
+    primaryScreen: 'desktop',
     schemaVersion: 'editor-lab/1',
     documentId: 'lab-document',
     name: 'Editor Lab',

@@ -136,6 +136,9 @@ for (const [name, mutate] of Object.entries(corruptions))
 test('auto section ignores hidden nodes and background, measured copy sets height', () => {
   const d = populated(),
     l = d.sections[0]!.layouts.mobile;
+  // Isolate height calculation from the separately tested responsive generation.
+  for (const p of Object.values(l.placements)) p.hidden = true;
+  l.placements['node-heading']!.hidden = false;
   l.placements['node-heading']!.yPx = 800;
   assert.equal(sectionHeight(d, 'mobile', { 'node-heading': 240 }), 1072);
   l.placements['node-heading']!.hidden = true;
@@ -231,7 +234,7 @@ test('duplicate, responsive alternatives, change type, delete and undo', () => {
         .layerBand,
       'interactive',
     );
-  h.commit({ type: 'DeleteNode', id: 'heading-mobile' });
+  h.commit({ type: 'DeleteNode', id: 'heading-mobile', confirmed: true });
   h.undo();
   validate(h.document);
   assert.ok(h.document.nodes['heading-mobile']);

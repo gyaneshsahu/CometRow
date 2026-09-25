@@ -1,3 +1,4 @@
+import { contentRole, intentionalOverlap } from './lab-layout-graph.js';
 import {
   type LabDocument,
   type LabNode,
@@ -8,6 +9,11 @@ import {
   sectionHeight,
   zOrder,
 } from './lab-model.js';
+import {
+  autoLayout,
+  textContent,
+  type TextMeasure,
+} from './lab-auto-layout.js';
 export const assetUrls = new Map<string, string>();
 export function element<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -58,7 +64,12 @@ export function source(d: LabDocument, id: string) {
       ? a.source.url
       : (assetUrls.get(a.source.blobKey) ?? '');
 }
-export function renderNode(d: LabDocument, n: LabNode, b: Device): HTMLElement {
+export function renderNode(
+  d: LabDocument,
+  n: LabNode,
+  b: Device,
+  generatedStyle?: Style,
+): HTMLElement {
   let e: HTMLElement;
   switch (n.type) {
     case 'heading':
@@ -118,7 +129,7 @@ export function renderNode(d: LabDocument, n: LabNode, b: Device): HTMLElement {
   e.className = 'lab-node';
   e.dataset.node = n.id;
   const p = d.sections[0]!.layouts[b].placements[n.id]!,
-    style = resolved(n, b);
+    style = generatedStyle ?? resolved(n, b);
   applyStyle(e, style);
   e.style.left = percent(p.x) + '%';
   e.style.width = percent(p.w) + '%';
@@ -142,35 +153,113 @@ export function renderNode(d: LabDocument, n: LabNode, b: Device): HTMLElement {
   }
   return e;
 }
+// Measure with the same CSS/font/box model as the rendered text. Cache by content,
+// style and pixel width so three thumbnails do not repeatedly force layout.
+const textMeasurements = new Map<string, number>();
+export const measureText: TextMeasure = (n, width, style) => {
+  const key = JSON.stringify([
+    n.type,
+    n.type === 'heading' ? n.content.level : null,
+    textContent(n),
+    width,
+    style,
+  ]);
+  const cached = textMeasurements.get(key);
+  if (cached !== undefined) return cached;
+  const probe =
+    n.type === 'heading'
+      ? document.createElement(`h${n.content.level}`)
+      : element(
+          n.type === 'button' ? 'a' : n.type === 'paragraph' ? 'p' : 'div',
+        );
+  probe.textContent = textContent(n);
+  probe.className = 'lab-node';
+  applyStyle(probe, style);
+  Object.assign(probe.style, {
+    width: width + 'px',
+    height: 'auto',
+    minHeight: '0',
+    position: 'absolute',
+    left: '-100000px',
+    top: '0',
+    visibility: 'hidden',
+    pointerEvents: 'none',
+  });
+  document.body.append(probe);
+  const height = Math.ceil(
+    Math.max(probe.scrollHeight, probe.getBoundingClientRect().height),
+  );
+  probe.remove();
+  if (textMeasurements.size > 1024) textMeasurements.clear();
+  textMeasurements.set(key, height);
+  return height;
+};
+const renderedLayouts = new WeakMap<
+  HTMLElement,
+  {
+    document: LabDocument;
+    height: number;
+    warnings: string[];
+    generated: boolean;
+  }
+>();
 export function renderSection(
   d: LabDocument,
   b: Device,
   width = d.breakpoints[b].previewWidthPx,
 ) {
-  const s = d.sections[0]!,
+  const result = autoLayout(d, b, width, measureText);
+  const view = {
+    ...d,
+    breakpoints: {
+      ...d.breakpoints,
+      [b]: { ...d.breakpoints[b], previewWidthPx: width },
+    },
+    sections: [
+      {
+        ...d.sections[0]!,
+        layouts: { ...d.sections[0]!.layouts, [b]: result.layout },
+      },
+    ],
+  };
+  const s = view.sections[0]!,
     root = element('section');
+  renderedLayouts.set(root, {
+    document: view,
+    height: result.height,
+    warnings: [...result.warnings, ...(result.notes ?? [])],
+    generated:
+      b !== (d.primaryScreen ?? 'desktop') &&
+      Object.values(result.layout.placements).some(
+        (p) => p.geometryMode === 'auto',
+      ),
+  });
   root.className = 'lab-section';
   root.id = s.id;
   root.style.width = width + 'px';
-  root.style.height = sectionHeight(d, b) + 'px';
+  root.style.height = result.height + 'px';
   root.dataset.device = b;
   for (const id of s.readingOrder)
     if (!s.layouts[b].placements[id]!.hidden)
-      root.append(renderNode(d, d.nodes[id]!, b));
+      root.append(renderNode(view, d.nodes[id]!, b, result.styles[id]));
   return root;
 }
 export function measureSection(root: HTMLElement, d: LabDocument, b: Device) {
+  const rendered = renderedLayouts.get(root);
+  d = rendered?.document ?? d;
   const measured: Record<string, number> = {};
   for (const el of root.querySelectorAll<HTMLElement>('[data-node]'))
     measured[el.dataset.node!] = el.offsetHeight;
-  const height = sectionHeight(d, b, measured);
+  const height = rendered?.generated
+    ? rendered.height
+    : sectionHeight(d, b, measured);
   root.style.height = height + 'px';
   for (const el of root.querySelectorAll<HTMLElement>('[data-node]'))
     if (
       d.sections[0]!.layouts[b].placements[el.dataset.node!]!.sectionBackground
     )
       el.style.height = height + 'px';
-  const warnings: string[] = [];
+  const warnings: string[] = [...(rendered?.warnings ?? [])];
   const nodes = [...root.querySelectorAll<HTMLElement>('[data-node]')];
   for (const el of nodes) {
     const p = d.sections[0]!.layouts[b].placements[el.dataset.node!]!;
@@ -183,11 +272,22 @@ export function measureSection(root: HTMLElement, d: LabDocument, b: Device) {
       );
     if (d.nodes[el.dataset.node!]!.type === 'button' && el.offsetHeight < 44)
       warnings.push('Button target is below 44 px.');
-    if (p.sectionBackground || p.layerBand === 'decorative') continue;
+    if (
+      p.sectionBackground ||
+      p.layerBand === 'decorative' ||
+      !contentRole(d, el.dataset.node!)
+    )
+      continue;
     for (const other of nodes) {
       if (other === el) break;
       const op = d.sections[0]!.layouts[b].placements[other.dataset.node!]!;
-      if (op.sectionBackground || op.layerBand === 'decorative') continue;
+      if (
+        op.sectionBackground ||
+        op.layerBand === 'decorative' ||
+        !contentRole(d, other.dataset.node!) ||
+        intentionalOverlap(d, el.dataset.node!, other.dataset.node!)
+      )
+        continue;
       if (
         el.offsetLeft < other.offsetLeft + other.offsetWidth &&
         el.offsetLeft + el.offsetWidth > other.offsetLeft &&

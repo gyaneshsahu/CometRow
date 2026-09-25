@@ -39,7 +39,22 @@ async function put(store: 'documents' | 'assets', key: string, value: unknown) {
 }
 export async function save(d: LabDocument) {
   validate(d);
-  await put('documents', 'draft', d);
+  const connection = await db();
+  await new Promise<void>((resolve, reject) => {
+    const tx = connection.transaction('documents', 'readwrite');
+    const store = tx.objectStore('documents');
+    const previous = store.get('draft');
+    previous.onsuccess = () => {
+      const value: unknown = previous.result;
+      if (value && typeof value === 'object' && !('primaryScreen' in value)) {
+        store.put(value, 'legacy-before-primary-' + crypto.randomUUID());
+      }
+      store.put(d, 'draft');
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
 }
 export async function upload(key: string, file: File) {
   validateFile(file);

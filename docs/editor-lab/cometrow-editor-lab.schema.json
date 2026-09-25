@@ -15,6 +15,7 @@
     "assets"
   ],
   "properties": {
+    "primaryScreen": { "$ref": "#/$defs/BreakpointName" },
     "schemaVersion": {
       "const": "editor-lab/1"
     },
@@ -112,6 +113,23 @@
         "horizontalUnits": { "const": 480 }
       }
     },
+    "ResponsiveRelationships": {
+      "type": "object", "additionalProperties": false,
+      "required": ["groups", "roles"],
+      "properties": {
+        "roles": {"type": "object", "propertyNames": {"$ref": "#/$defs/Id"}, "additionalProperties": {"enum": ["content", "decoration"]}},
+        "groups": {"type": "array", "maxItems": 100, "items": {
+          "type": "object", "additionalProperties": false,
+          "required": ["id", "name", "layout", "children"],
+          "properties": {
+            "id": {"$ref": "#/$defs/Id"},
+            "name": {"type": "string", "minLength": 1, "maxLength": 80},
+            "layout": {"enum": ["row", "stack", "overlay"]},
+            "children": {"type": "array", "uniqueItems": true, "maxItems": 200, "items": {"$ref": "#/$defs/Id"}}
+          }
+        }}
+      }
+    },
     "Section": {
       "type": "object",
       "additionalProperties": false,
@@ -130,6 +148,7 @@
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/Id" }
         },
+        "responsive": {"$ref": "#/$defs/ResponsiveRelationships"},
         "bottomPaddingPx": {
           "type": "integer",
           "minimum": 0,
@@ -198,6 +217,7 @@
       "additionalProperties": false,
       "required": ["x", "yPx", "w", "height", "layerBand", "layerOrder", "locked", "hidden", "sectionBackground"],
       "properties": {
+        "geometryMode": { "enum": ["auto", "custom"] },
         "x": { "type": "integer", "minimum": 0, "maximum": 479 },
         "yPx": { "type": "integer", "minimum": 0, "maximum": 10000 },
         "w": { "type": "integer", "minimum": 1, "maximum": 480 },

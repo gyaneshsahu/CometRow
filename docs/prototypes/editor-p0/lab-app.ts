@@ -2,6 +2,7 @@ import {
   seed,
   devices,
   bands,
+  breakpoint,
   createNode,
   placement,
   uid,
@@ -11,7 +12,9 @@ import {
   sectionHeight,
   nodeHeight,
   resolved,
-  validate,
+  normalizeDocument,
+  primaryScreen,
+  geometryState,
   validateFile,
   type Device,
   type Kind,
@@ -25,13 +28,17 @@ import {
   renderSection,
   measureSection,
   assetUrls,
+  measureText,
 } from './lab-render.js';
+import { autoLayout } from './lab-auto-layout.js';
+import { responsiveControls } from './lab-responsive-controls.js';
 import * as storage from './lab-storage.js';
 const $ = <T extends HTMLElement = HTMLElement>(s: string) =>
   document.querySelector<T>(s)!;
+const reviewCopy = new URLSearchParams(location.search).get('review') === '1';
 const host = $('#lab');
 host.innerHTML = `<header><div class="tools"><a class="brand" href="/editor-lab"><span aria-hidden="true">↗</span>CometRow</a><div>Editor Lab<div id="lab-status" role="status">Loading local draft…</div></div></div><button id="lab-add" class="primary">＋ Add Container</button><div class="tools"><button id="lab-undo">Undo</button><button id="lab-redo">Redo</button><button id="lab-preview">Preview</button><button id="lab-export">Export</button><button id="lab-import">Import</button></div></header><div id="lab-message" role="status">Isolated P0 review · Alt disables snapping · local browser storage</div><div class="lab-workspace"><aside class="lab-rail" aria-label="Live breakpoint previews"></aside><main class="lab-main"><div class="lab-toolbar"><strong id="lab-device">Desktop</strong><label>Zoom <select id="lab-zoom"><option value="fit">Fit</option><option value="0.5">50%</option><option value="0.75">75%</option><option value="1">100%</option></select></label><span id="lab-origin"></span></div><div id="lab-space"><div class="lab-stage"></div></div><div id="lab-warning" role="status"></div></main><aside class="lab-inspector" aria-label="Properties and Layers"></aside></div><dialog class="lab-picker" aria-labelledby="lab-picker-title"><h2 id="lab-picker-title">Choose container type</h2><div class="tools"></div><button id="lab-cancel">Cancel</button></dialog>`;
-let history = new History(seed()),
+let history = new History(seed(), measureText),
   device: Device = 'desktop',
   selected = '',
   zoom = 'fit',
@@ -48,7 +55,13 @@ const names: Record<Device, string> = {
   desktop: 'Desktop',
 };
 const doc = () => history.document;
-const layout = () => doc().sections[0]!.layouts[device];
+const layout = () =>
+  autoLayout(
+    doc(),
+    device,
+    doc().breakpoints[device].previewWidthPx,
+    measureText,
+  ).layout;
 const node = () => doc().nodes[selected];
 const message = (text: string) => {
   $('#lab-message').textContent = text;
@@ -56,6 +69,10 @@ const message = (text: string) => {
 const error = (e: unknown) =>
   message(e instanceof Error ? e.message : String(e));
 function autosave() {
+  if (reviewCopy) {
+    $('#lab-status').textContent = 'Review copy - not saved';
+    return;
+  }
   clearTimeout(saveTimer);
   $('#lab-status').textContent = 'Unsaved changes';
   saveTimer = setTimeout(() => {
@@ -82,16 +99,21 @@ function commit(c: Command, key = '') {
     return false;
   }
 }
-function confirmAction(text: string): Promise<boolean> {
+function confirmAction(
+  text: string,
+  title = 'Confirm replacement',
+  accept = 'Replace',
+  cancel = 'Cancel replacement',
+): Promise<boolean> {
   return new Promise((resolve) => {
     const dialog = element('dialog');
     dialog.className = 'lab-confirm';
-    dialog.setAttribute('aria-label', 'Confirm replacement');
-    dialog.append(element('h2', 'Confirm replacement'), element('p', text));
+    dialog.setAttribute('aria-label', title);
+    dialog.append(element('h2', title), element('p', text));
     let accepted = false;
     dialog.append(
-      button('Cancel replacement', () => dialog.close()),
-      button('Replace', () => {
+      button(cancel, () => dialog.close()),
+      button(accept, () => {
         accepted = true;
         dialog.close();
       }),
@@ -103,6 +125,23 @@ function confirmAction(text: string): Promise<boolean> {
     document.body.append(dialog);
     dialog.showModal();
   });
+}
+async function deleteEverywhere(id: string) {
+  if (!doc().nodes[id]) return;
+  if (
+    await confirmAction(
+      'Delete this element from Phone, Tablet and Desktop? You can undo this.',
+      'Delete everywhere',
+      'Delete everywhere',
+      'Cancel deletion',
+    )
+  ) {
+    if (commit({ type: 'DeleteNode', id, confirmed: true })) {
+      selected = '';
+      render();
+      $('#lab-add').focus();
+    }
+  }
 }
 function button(label: string, fn: () => void) {
   const b = element('button', label);
@@ -212,11 +251,8 @@ function inspector() {
           render();
         }
       }),
-      button('Delete', () => {
-        commit({ type: 'DeleteNode', id: n.id });
-        selected = '';
-        render();
-        $('#lab-add').focus();
+      button('Delete everywhere', () => {
+        void deleteEverywhere(n.id);
       }),
     );
     props.append(tools);
@@ -410,6 +446,7 @@ function inspector() {
         }),
       );
     }
+    props.append(responsiveControls(doc(), n.id, commit));
     const p = layout().placements[n.id]!,
       geo = group(props, 'Position & dimensions', true);
     const fields = element('div');
@@ -455,9 +492,22 @@ function inspector() {
         (v) => geometry({ height: { mode: 'aspect', ratio: v } }),
         0.01,
       );
-    check(geo, 'Hidden on this breakpoint', p.hidden, (v) =>
-      commit({ type: 'SetNodeVisibility', id: n.id, device, value: v }),
+    geo.append(
+      button(p.hidden ? 'Show on this screen' : 'Hide on this screen', () =>
+        commit({
+          type: 'SetNodeVisibility',
+          id: n.id,
+          device,
+          value: !p.hidden,
+        }),
+      ),
     );
+    if (device !== primaryScreen(doc()))
+      geo.append(
+        button('Reset to Auto', () =>
+          commit({ type: 'ResetNodeToAuto', id: n.id, device }),
+        ),
+      );
     check(geo, 'Locked on this breakpoint', p.locked, (v) =>
       commit({ type: 'LockNode', id: n.id, device, value: v }),
     );
@@ -571,32 +621,6 @@ function inspector() {
             : { mode: 'fixed', px: v },
       }),
   );
-  section.append(
-    button(
-      'Generate from ' + (device === 'desktop' ? 'Tablet' : 'Desktop'),
-      () =>
-        commit({
-          type: 'ApplyGeneratedBreakpointLayout',
-          device,
-          from: device === 'desktop' ? 'tablet' : 'desktop',
-        }),
-    ),
-    button('Reset this breakpoint', async () => {
-      if (
-        await confirmAction(
-          'Replace this breakpoint layout from ' +
-            (device === 'desktop' ? 'Tablet' : 'Desktop') +
-            '? This is undoable.',
-        )
-      )
-        commit({
-          type: 'ResetBreakpointLayout',
-          device,
-          from: device === 'desktop' ? 'tablet' : 'desktop',
-          confirmed: true,
-        });
-    }),
-  );
   const layers = group(panel, 'Layers', true);
   layers.append(
     element('small', 'Reading order is independent of visual bands.'),
@@ -652,7 +676,7 @@ function inspector() {
       button(p.locked ? 'Unlock' : 'Lock', () =>
         commit({ type: 'LockNode', id, device, value: !p.locked }),
       ),
-      button(p.hidden ? 'Show' : 'Hide', () =>
+      button(p.hidden ? 'Show on this screen' : 'Hide on this screen', () =>
         commit({ type: 'SetNodeVisibility', id, device, value: !p.hidden }),
       ),
     );
@@ -660,18 +684,7 @@ function inspector() {
     layers.append(row);
   }
 }
-function render() {
-  const active = document.activeElement;
-  const activeLabel = active?.closest('label')?.firstChild?.textContent;
-  const caret =
-    active instanceof HTMLTextAreaElement
-      ? [active.selectionStart, active.selectionEnd]
-      : undefined;
-  const scroll = $('.lab-inspector').scrollTop;
-  $('#lab-device').textContent = names[device];
-  $('#lab-origin').textContent = layout().origin + ' layout';
-  $<HTMLButtonElement>('#lab-undo').disabled = !history.past.length;
-  $<HTMLButtonElement>('#lab-redo').disabled = !history.future.length;
+function renderRail() {
   const rail = $('.lab-rail');
   rail.replaceChildren();
   for (const bp of devices) {
@@ -692,12 +705,64 @@ function render() {
     r.removeAttribute('id');
     mini.append(r);
     b.append(mini);
-    rail.append(b);
+    const card = element('div');
+    card.className = 'lab-rail-card';
+    card.dataset.screen = bp;
+    const badges = element('div');
+    badges.className = 'lab-rail-badges';
+    if (bp === device) badges.append(element('span', 'Open'));
+    if (bp === primaryScreen(doc()))
+      badges.append(element('strong', 'Primary'));
+    else if (node())
+      badges.append(element('span', geometryState(doc(), selected, bp)));
+    card.append(b, badges);
+    if (bp !== primaryScreen(doc())) {
+      const setPrimary = button('Set as Primary', async () => {
+        if (
+          await confirmAction(
+            'Use ' +
+              names[bp] +
+              ' as Primary? Its layout and all Custom geometry will be preserved. The previous Primary becomes Custom. Only Auto geometry will regenerate.',
+            'Change Primary',
+            'Set as Primary',
+            'Cancel change',
+          )
+        )
+          commit({ type: 'SetPrimaryScreen', device: bp, confirmed: true });
+      });
+      setPrimary.setAttribute('aria-label', 'Set ' + names[bp] + ' as Primary');
+      card.append(setPrimary);
+    }
+    if (bp !== primaryScreen(doc())) {
+      const ps = Object.values(doc().sections[0]!.layouts[bp].placements);
+      const auto = ps.filter((p) => p.geometryMode === 'auto').length;
+      card.append(
+        element(
+          'small',
+          `${auto} Auto / ${ps.length - auto} Custom - badge describes selected element`,
+        ),
+      );
+    }
+    rail.append(card);
     const result = measureSection(r, doc(), bp);
     const k = Math.min((b.clientWidth - 16) / width, 130 / result.height);
     r.style.transform = `scale(${k})`;
     mini.style.height = result.height * k + 'px';
   }
+}
+function render() {
+  const active = document.activeElement;
+  const activeLabel = active?.closest('label')?.firstChild?.textContent;
+  const caret =
+    active instanceof HTMLTextAreaElement
+      ? [active.selectionStart, active.selectionEnd]
+      : undefined;
+  const scroll = $('.lab-inspector').scrollTop;
+  $('#lab-device').textContent = names[device];
+  $('#lab-origin').textContent = layout().origin + ' layout';
+  $<HTMLButtonElement>('#lab-undo').disabled = !history.past.length;
+  $<HTMLButtonElement>('#lab-redo').disabled = !history.future.length;
+  renderRail();
   const stage = $('.lab-stage'),
     width = doc().breakpoints[device].previewWidthPx;
   stage.replaceChildren();
@@ -741,6 +806,7 @@ function render() {
       hit.onclick = () => {
         selected = id;
         inspector();
+        renderRail();
         selectionOverlay();
       };
       hit.onkeydown = (e) => {
@@ -902,6 +968,7 @@ function startGesture(e: PointerEvent, id?: string, handle?: string) {
   if (id) {
     selected = id;
     inspector();
+    renderRail();
     if (!handle) selectionOverlay();
   }
   const paint = () => {
@@ -1059,7 +1126,31 @@ $('#lab-preview').onclick = () => {
   view.append(root);
   document.body.append(view);
   measureSection(root, doc(), device);
+  if (reviewCopy) {
+    const widths = [320, 360, 390, 430, 639, 640, 768, 1023, 1024, 1200, 1440];
+    const controls = element('div');
+    field(
+      controls,
+      'Review width',
+      doc().breakpoints[device].previewWidthPx,
+      (value) => {
+        const width = Number(value),
+          b = breakpoint(width);
+        const next = renderSection(doc(), b, width);
+        view.replaceChildren(next);
+        measureSection(next, doc(), b);
+      },
+      widths.map(String),
+    );
+    controls.style.cssText =
+      'position:fixed;bottom:12px;right:12px;z-index:2000;background:white;padding:8px;border:1px solid #d6dfef;';
+    document.body.append(controls);
+    view.addEventListener('review-close', () => controls.remove(), {
+      once: true,
+    });
+  }
   const exit = button('Exit preview', () => {
+    view.dispatchEvent(new Event('review-close'));
     view.remove();
     exit.remove();
     host.hidden = false;
@@ -1093,9 +1184,9 @@ $('#lab-import').onclick = () => {
     void (async () => {
       if (file.size > 2e6) throw Error('JSON must be under 2 MB');
       const value: unknown = JSON.parse(await file.text());
-      validate(value);
-      await loadAssets(value);
-      if (commit({ type: 'ImportDocument', document: value })) {
+      const normalized = normalizeDocument(value);
+      await loadAssets(normalized);
+      if (commit({ type: 'ImportDocument', document: normalized })) {
         selected = '';
         render();
       }
@@ -1117,6 +1208,20 @@ window.addEventListener('resize', () => {
 });
 document.addEventListener('keydown', (e) => {
   if (
+    e.key === 'Delete' &&
+    selected &&
+    !host.hidden &&
+    !document.querySelector('dialog[open]') &&
+    !(
+      e.target instanceof Element &&
+      e.target.closest('input,textarea,select,[contenteditable]')
+    )
+  ) {
+    e.preventDefault();
+    void deleteEverywhere(selected);
+    return;
+  }
+  if (
     (e.ctrlKey || e.metaKey) &&
     e.key === 'z' &&
     !(
@@ -1137,9 +1242,9 @@ try {
   const saved = await storage.read('documents', 'draft');
   if (saved) {
     try {
-      validate(saved);
-      await loadAssets(saved);
-      history = new History(saved);
+      const normalized = normalizeDocument(saved);
+      await loadAssets(normalized);
+      history = new History(normalized, measureText);
     } catch (e) {
       await storage.preserveCorrupt(saved);
       message(
@@ -1147,7 +1252,9 @@ try {
       );
     }
   }
-  $('#lab-status').textContent = 'Saved locally';
+  $('#lab-status').textContent = reviewCopy
+    ? 'Review copy - not saved'
+    : 'Saved locally';
 } catch (e) {
   saveBlocked = true;
   $('#lab-status').textContent = 'Storage unavailable — use JSON export';
