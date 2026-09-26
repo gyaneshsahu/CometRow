@@ -185,6 +185,7 @@ export function execute(
       p!.locked = c.value;
       break;
     case 'SetLayer':
+      delete p!.inferredRole;
       p!.layerBand = c.band;
       p!.layerOrder = Math.max(0, Math.min(99, Math.round(c.order)));
       break;
@@ -242,6 +243,10 @@ export function execute(
       };
       break;
     case 'DetachImageFromBackground':
+      if (c.device === primary) {
+        s.responsive ??= { groups: [], roles: {} };
+        s.responsive.roles[c.id] = 'content';
+      }
       p!.geometryMode = 'custom';
       Object.assign(p!, {
         sectionBackground: false,

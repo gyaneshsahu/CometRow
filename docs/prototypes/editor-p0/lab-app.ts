@@ -1122,10 +1122,19 @@ $('#lab-preview').onclick = () => {
   host.hidden = true;
   const view = element('div');
   view.className = 'lab-preview';
-  const root = renderSection(doc(), device);
-  view.append(root);
+  const draw = () => {
+    const width =
+      device === 'desktop'
+        ? window.innerWidth
+        : Math.min(window.innerWidth, doc().breakpoints[device].previewWidthPx);
+    const b = breakpoint(width),
+      root = renderSection(doc(), b, width);
+    view.replaceChildren(root);
+    measureSection(root, doc(), b);
+  };
   document.body.append(view);
-  measureSection(root, doc(), device);
+  draw();
+  if (!reviewCopy) window.addEventListener('resize', draw);
   if (reviewCopy) {
     const widths = [320, 360, 390, 430, 639, 640, 768, 1023, 1024, 1200, 1440];
     const controls = element('div');
@@ -1150,6 +1159,7 @@ $('#lab-preview').onclick = () => {
     });
   }
   const exit = button('Exit preview', () => {
+    window.removeEventListener('resize', draw);
     view.dispatchEvent(new Event('review-close'));
     view.remove();
     exit.remove();

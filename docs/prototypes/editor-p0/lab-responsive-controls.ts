@@ -1,5 +1,12 @@
-import { type LabDocument, type ResponsiveGroup, uid } from './lab-model.js';
+import {
+  type LabDocument,
+  type ResponsiveGroup,
+  uid,
+  primaryScreen,
+} from './lab-model.js';
 import { type Command } from './lab-commands.js';
+import { inferredRole, layoutGraph, graphLeaves } from './lab-layout-graph.js';
+import { measureText } from './lab-render.js';
 import { element } from './lab-render.js';
 
 // Relationships describe responsive intent only; they do not contain or move
@@ -15,7 +22,7 @@ export function responsiveControls(
   root.append(
     element(
       'small',
-      'Primary stays freeform. Groups control Auto layouts. Custom placements stay protected. Use Overlay only for intentional overlap.',
+      'Auto follows your Primary design. Clarify only what it cannot infer. Custom placements stay protected.',
     ),
   );
   const r = structuredClone(
@@ -48,10 +55,75 @@ export function responsiveControls(
     root.append(l);
     return s;
   };
+  const role = inferredRole(d, selected);
+  const graph = layoutGraph(d, measureText).root;
+  const relationship = (g: typeof graph): typeof graph | undefined =>
+    g.children.some((c) => c.id === selected)
+      ? g
+      : g.children.map(relationship).find(Boolean);
+  const found = relationship(graph);
+  root.append(
+    element(
+      'small',
+      `Inferred: ${role.role}. ${role.reason}. ${found ? found.mode + ' with ' + (graphLeaves(found).length - 1) + ' related elements.' : ''}`,
+    ),
+  );
+  const labelFor = (id: string) => {
+    const n = d.nodes[id]!;
+    return (
+      n.name +
+      ': ' +
+      (n.type === 'button'
+        ? n.content.label
+        : n.type === 'heading' || n.type === 'paragraph'
+          ? n.content.text
+          : n.type
+      ).slice(0, 40)
+    );
+  };
+  const peers = [
+    { id: '', name: 'Choose an element' },
+    ...d.sections[0]!.childIds.filter((id) => id !== selected).map((id) => ({
+      id,
+      name: labelFor(id),
+    })),
+  ];
+  for (const [label, mode] of [
+    ['Keep together with', 'row'],
+    ['Overlay with', 'overlay'],
+    ['Place before', 'stack'],
+  ] as const) {
+    select(label, '', peers, (id) => {
+      if (!id) return;
+      // A simple correction persists through the same validated, undoable command
+      // as advanced relationships. It never edits a Primary rectangle.
+      for (const g of r.groups)
+        g.children = g.children.filter((key) => key !== id && key !== selected);
+      r.groups.push({
+        id: uid(),
+        name:
+          label === 'Place before' ? 'Reading sequence' : 'Related elements',
+        layout: mode,
+        children:
+          mode === 'row'
+            ? [selected, id].sort(
+                (a, b) =>
+                  d.sections[0]!.layouts[primaryScreen(d)].placements[a]!.x -
+                  d.sections[0]!.layouts[primaryScreen(d)].placements[b]!.x,
+              )
+            : [selected, id],
+      });
+      if (mode === 'overlay') {
+        r.roles[id] = 'content';
+        r.roles[selected] = 'content';
+      }
+      save();
+    });
+  }
   const roles =
     d.nodes[selected]!.type === 'button'
-      ? ['Use visual band', 'Content']
-      : ['Use visual band', 'Content', 'Decoration'];
+      ? ['Automatic', 'Content']
+      : ['Automatic', 'Content', 'Decoration'];
   select(
     'Responsive role',
     r.roles[selected] ?? '',
@@ -62,6 +134,12 @@ export function responsiveControls(
       save();
     },
   );
+  const simple = root;
+  const advanced = element('details');
+  advanced.append(element('summary', 'Advanced relationships'));
+  simple.append(advanced);
+  // Keep graph construction available without requiring it for ordinary drafts.
+  const simpleCount = root.children.length;
   const owner = r.groups.find((g) => g.children.includes(selected));
   select(
     'Responsive group',
@@ -180,5 +258,7 @@ export function responsiveControls(
     );
     root.append(box);
   }
+  while (root.children.length > simpleCount)
+    advanced.append(root.children[simpleCount]!);
   return root;
 }

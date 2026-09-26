@@ -218,6 +218,7 @@
       "required": ["x", "yPx", "w", "height", "layerBand", "layerOrder", "locked", "hidden", "sectionBackground"],
       "properties": {
         "geometryMode": { "enum": ["auto", "custom"] },
+        "inferredRole": { "enum": ["content", "decoration", "background"] },
         "x": { "type": "integer", "minimum": 0, "maximum": 479 },
         "yPx": { "type": "integer", "minimum": 0, "maximum": 10000 },
         "w": { "type": "integer", "minimum": 1, "maximum": 480 },

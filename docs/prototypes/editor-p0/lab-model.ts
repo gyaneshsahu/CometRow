@@ -32,6 +32,7 @@ export type Height =
   | { mode: 'aspect'; ratio: number };
 export type Placement = {
   geometryMode?: 'auto' | 'custom';
+  inferredRole?: 'content' | 'decoration' | 'background';
   x: number;
   yPx: number;
   w: number;

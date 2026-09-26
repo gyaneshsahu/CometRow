@@ -157,3 +157,53 @@ All eight fixtures were visually inspected at eleven widths (320, 360, 390, 430,
 Verified results: **75 Editor Lab tests**, **198 browser assertions**, **18 application tests**, **10 original P0 tests**, **35 integration tests**; both typechecks, lint, formatting, build and `git diff --check` passed. New assertions cover stack order, CTA adjacency, nested cards, intentional overlap, media size caps, renamed IDs/reversed creation order, multiple Desktop widths, invalid/cyclic relationships, Custom protection, persistence, Undo and review-copy isolation. No production source, package scripts, migrations or production data were changed.
 
 Limitation: arbitrary freeform coordinates cannot establish semantic intent dependably. Authors must identify ambiguous relationships and decorative roles; inference remains a proposal for ungrouped elements. Conflicting Custom placements are deliberately retained and may require a selected-element reset or manual adjustment. Elaborate overlays can still need breakpoint-specific art direction. Existing fixed-section/schema limits and local asset-storage limitations remain. Background artwork and its contrast are preserved as authored.
+
+## Automatic inference follow-up - verified 2026-09-26
+
+This supersedes the manual relationship setup described above. The engine now infers nearby CTA rows, complete columns beneath spanning headings, copy plus side-media relationships, contained text/media overlays, broad backgrounds and small isolated decoration from Primary geometry, types and paint order. The inspector explains inferred roles and provides saved **Keep together with**, **Overlay with**, **Place before** and **Responsive role** corrections; advanced graph controls are collapsed. Optional placement `inferredRole` distinguishes generated roles from authored layers. Explicit relationships, Primary geometry and existing Custom placements remain protected. Normal Preview reflows on window resize.
+
+Four new drafts were freely authored through Add and inspector controls, without predefined responsive groups. They use normal editor/autosave code in separate persistent test namespaces to preserve the founder's main draft; none uses `review=1`. The centered hero automatically kept paragraph, heading, CTA pair and foreground media in order. Only its ambiguous small artwork received a saved Decoration confirmation after the first automatic preview. The other three received no relationship or role corrections. The side-image workflow exposed an additional column-association bug, which was fixed generally and covered by an offset-varied regression.
+
+| Saved UI-created draft                                                            | Desktop                                                                                | Tablet                               | Phone                                                                            |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------- |
+| [Workshop hero](http://127.0.0.1:3002/editor-lab?test=1&run=ordinary-hero-a)      | [PNG](automatic/workshop-desktop.png)                                                  | [PNG](automatic/workshop-tablet.png) | [PNG](automatic/workshop-phone.png)                                              |
+| [Trail hero](http://127.0.0.1:3002/editor-lab?test=1&run=ordinary-hero-b)         | [PNG](automatic/trails-desktop.png)                                                    | [PNG](automatic/trails-tablet.png)   | [PNG](automatic/trails-phone.png)                                                |
+| [Three cards](http://127.0.0.1:3002/editor-lab?test=1&run=ordinary-hero-c)        | [PNG](automatic/cards-desktop.png)                                                     | [PNG](automatic/cards-tablet.png)    | [Top](automatic/cards-phone-top.png), [bottom](automatic/cards-phone-bottom.png) |
+| [Automatic overlay](http://127.0.0.1:3002/editor-lab?test=1&run=ordinary-overlay) | [1024](automatic/overlay-desktop-1024.png), [1440](automatic/overlay-desktop-1440.png) | [PNG](automatic/overlay-tablet.png)  | [PNG](automatic/overlay-phone.png)                                               |
+
+The drafts above survive refresh in the browser profile used for verification. [Workshop export](automatic/workshop-export.json) was downloaded through Export and imported through the real file chooser into a fresh draft. Its saved artwork role and generated layouts survived. A Phone-only artwork move remained Custom after refresh, while every Primary element's rendered style stayed identical. Screenshot layouts use bundled sample artwork; no founder uploads were copied into these new drafts. Desktop captures show the authored editor canvas; Tablet/Phone captures show Preview, except the overlay Desktop captures explicitly test normal Preview at two live browser widths.
+
+Verified: **82 Editor Lab tests**, **200 browser assertions** (including 88 fixture/width combinations), **18 application**, **10 original P0** and **35 integration tests**. Both typechecks, lint, formatting, build and diff checks passed. Seven new inference tests assert semantic order, CTA adjacency, complete cards, clear versus ambiguous overlaps, role re-inference after Primary movement, JSON round trips and Custom protection. Browser assertions exercise the simple correction controls and actual persistence. The four new UI designs were also visually inspected; passing bounds checks alone was not treated as proof.
+
+Limit: inference is a useful draft, not a guarantee of intent for arbitrary artwork. Small media may be meaningful; partial overlaps and complex collages can be ambiguous. A saved role or pair relationship is the smallest correction for the supported cases. Existing Custom geometry is deliberately not repaired automatically. The short explanation is [RESPONSIVE_FIX.md](RESPONSIVE_FIX.md). Start: `npm run editor:lab`; URL: <http://127.0.0.1:3002/editor-lab>. No production files, dependencies or data changed.
+
+### Files changed in this follow-up
+
+```text
+docs/editor-lab/cometrow-editor-lab.schema.json
+docs/prototypes/editor-p0/lab-app.ts
+docs/prototypes/editor-p0/lab-auto-layout.ts
+docs/prototypes/editor-p0/lab-browser-tests.ts
+docs/prototypes/editor-p0/lab-commands.ts
+docs/prototypes/editor-p0/lab-layout-graph.ts
+docs/prototypes/editor-p0/lab-model.ts
+docs/prototypes/editor-p0/lab-responsive-controls.ts
+docs/review/editor-lab/README.md
+docs/review/editor-lab/RESPONSIVE_FIX.md
+docs/prototypes/editor-p0/lab-inference.test.ts
+docs/review/editor-lab/automatic/cards-desktop.png
+docs/review/editor-lab/automatic/cards-phone-bottom.png
+docs/review/editor-lab/automatic/cards-phone-top.png
+docs/review/editor-lab/automatic/cards-tablet.png
+docs/review/editor-lab/automatic/overlay-desktop-1024.png
+docs/review/editor-lab/automatic/overlay-desktop-1440.png
+docs/review/editor-lab/automatic/overlay-phone.png
+docs/review/editor-lab/automatic/overlay-tablet.png
+docs/review/editor-lab/automatic/trails-desktop.png
+docs/review/editor-lab/automatic/trails-phone.png
+docs/review/editor-lab/automatic/trails-tablet.png
+docs/review/editor-lab/automatic/workshop-desktop.png
+docs/review/editor-lab/automatic/workshop-export.json
+docs/review/editor-lab/automatic/workshop-phone.png
+docs/review/editor-lab/automatic/workshop-tablet.png
+```

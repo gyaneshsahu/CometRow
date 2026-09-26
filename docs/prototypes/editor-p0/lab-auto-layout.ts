@@ -14,6 +14,7 @@ import {
 import {
   layoutGraph,
   contentRole,
+  inferredRole,
   graphLeaves,
   type LayoutGraph,
 } from './lab-layout-graph.js';
@@ -76,7 +77,7 @@ export function autoLayout(
     warnings: string[] = [];
   const sourceWidth = d.breakpoints[primary].previewWidthPx;
   const projectingPrimary =
-    target === primary && width !== sourceWidth && !!section.responsive;
+    target === primary && width !== sourceWidth && section.childIds.length > 0;
   if (projectingPrimary)
     for (const p of Object.values(layout.placements)) p.geometryMode = 'auto';
   const active =
@@ -96,7 +97,9 @@ export function autoLayout(
       measure,
       (id) =>
         contentRole(d, id) &&
-        (section.responsive?.roles[id] === 'content' ||
+        (layout.placements[id]!.inferredRole === 'decoration' ||
+          layout.placements[id]!.inferredRole === 'background' ||
+          section.responsive?.roles[id] === 'content' ||
           layout.placements[id]!.geometryMode !== 'auto' ||
           ordinary(layout.placements[id]!) ||
           layout.placements[id]!.sectionBackground),
@@ -156,9 +159,19 @@ export function autoLayout(
       ...resolved(n, primary),
       ...n.styleOverrides[target],
     };
-    const p: Placement = { ...structuredClone(old), sectionBackground: false };
+    const p: Placement = {
+      ...structuredClone(old),
+      sectionBackground: false,
+      inferredRole: 'content',
+    };
     // Explicit content roles do not modify Primary bands or Custom placements.
-    if (section.responsive?.roles[id] === 'content' || old.sectionBackground) {
+    if (
+      layout.placements[id]!.inferredRole === 'decoration' ||
+      layout.placements[id]!.inferredRole === 'background' ||
+      section.responsive?.roles[id] === 'content' ||
+      old.sectionBackground ||
+      old.inferredRole !== undefined
+    ) {
       p.layerBand = n.type === 'button' ? 'interactive' : 'content';
       p.locked = src.locked;
     }
@@ -352,9 +365,10 @@ export function autoLayout(
       w: src.w,
       yPx: Math.round(src.yPx * scale),
       height: structuredClone(src.height),
-      sectionBackground: src.sectionBackground,
+      sectionBackground: inferredRole(d, id).role === 'background',
+      inferredRole: inferredRole(d, id).role,
       layerBand:
-        section.responsive?.roles[id] === 'decoration'
+        inferredRole(d, id).role === 'decoration'
           ? ('decorative' as const)
           : ordinary(src) && !ordinary(old) && !old.sectionBackground
             ? old.layerBand
@@ -363,7 +377,7 @@ export function autoLayout(
     };
     if (p.height.mode === 'fixed' && !src.sectionBackground)
       p.height.px = Math.max(1, Math.round(p.height.px * scale));
-    if (src.sectionBackground) {
+    if (p.sectionBackground) {
       p.x = 0;
       p.w = 480;
       p.yPx = 0;

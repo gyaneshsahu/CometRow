@@ -101,7 +101,8 @@ if (new URLSearchParams(location.search).has('demo')) {
         measureSection(root, h.document, b).warnings.some((w) =>
           w.includes('overlaps'),
         ) ===
-          (b === 'desktop'),
+          (b === 'desktop' &&
+            width === h.document.breakpoints.desktop.previewWidthPx),
         `${width}px: authored overlaps warned; Auto collisions resolved`,
       );
       root.remove();
@@ -522,7 +523,27 @@ if (new URLSearchParams(location.search).has('demo')) {
       joined.sections[0]!.responsive!.groups[0]!.children.length === 2,
       'UI joins related elements without moving Primary geometry',
     );
-    const relationshipJson = JSON.stringify(joined.sections[0]!.responsive);
+    field('Keep together with', addedId);
+    field('Responsive role', 'decoration');
+    await wait();
+    const clarified = await readDraft();
+    validate(clarified);
+    assert(
+      clarified.sections[0]!.responsive!.groups.some(
+        (g) =>
+          g.layout === 'row' &&
+          g.children.length === 2 &&
+          g.children.includes(addedId),
+      ),
+      'simple Keep together stores a relationship through the normal save path',
+    );
+    assert(
+      Object.values(clarified.sections[0]!.responsive!.roles).includes(
+        'decoration',
+      ),
+      'simple role clarification is persisted in the actual draft',
+    );
+    const relationshipJson = JSON.stringify(clarified.sections[0]!.responsive);
     await new Promise<void>((resolve) => {
       frame.onload = () => resolve();
       frame.contentWindow!.location.reload();
