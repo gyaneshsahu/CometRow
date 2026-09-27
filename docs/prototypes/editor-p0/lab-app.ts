@@ -1,6 +1,5 @@
 import {
   seed,
-  devices,
   bands,
   breakpoint,
   createNode,
@@ -33,11 +32,15 @@ import {
 import { autoLayout } from './lab-auto-layout.js';
 import { responsiveControls } from './lab-responsive-controls.js';
 import * as storage from './lab-storage.js';
+import { shellMarkup, initializeShell } from './lab-shell.js';
 const $ = <T extends HTMLElement = HTMLElement>(s: string) =>
   document.querySelector<T>(s)!;
 const reviewCopy = new URLSearchParams(location.search).get('review') === '1';
 const host = $('#lab');
-host.innerHTML = `<header><div class="tools"><a class="brand" href="/editor-lab"><span aria-hidden="true">↗</span>CometRow</a><div>Editor Lab<div id="lab-status" role="status">Loading local draft…</div></div></div><button id="lab-add" class="primary">＋ Add Container</button><div class="tools"><button id="lab-undo">Undo</button><button id="lab-redo">Redo</button><button id="lab-preview">Preview</button><button id="lab-export">Export</button><button id="lab-import">Import</button></div></header><div id="lab-message" role="status">Isolated P0 review · Alt disables snapping · local browser storage</div><div class="lab-workspace"><aside class="lab-rail" aria-label="Live breakpoint previews"></aside><main class="lab-main"><div class="lab-toolbar"><strong id="lab-device">Desktop</strong><label>Zoom <select id="lab-zoom"><option value="fit">Fit</option><option value="0.5">50%</option><option value="0.75">75%</option><option value="1">100%</option></select></label><span id="lab-origin"></span></div><div id="lab-space"><div class="lab-stage"></div></div><div id="lab-warning" role="status"></div></main><aside class="lab-inspector" aria-label="Properties and Layers"></aside></div><dialog class="lab-picker" aria-labelledby="lab-picker-title"><h2 id="lab-picker-title">Choose container type</h2><div class="tools"></div><button id="lab-cancel">Cancel</button></dialog>`;
+host.innerHTML = shellMarkup;
+const shell = initializeShell(host, () => {
+  if (!gesture) render();
+});
 let history = new History(seed(), measureText),
   device: Device = 'desktop',
   selected = '',
@@ -146,6 +149,8 @@ async function deleteEverywhere(id: string) {
 function button(label: string, fn: () => void) {
   const b = element('button', label);
   b.type = 'button';
+  b.title = label;
+  if (label === 'Delete everywhere') b.classList.add('lab-destructive');
   b.onclick = fn;
   return b;
 }
@@ -216,7 +221,7 @@ function check(
 }
 function group(parent: HTMLElement, title: string, open = false) {
   const d = element('details');
-  d.open = open;
+  shell.accordion(d, title, open);
   d.append(element('summary', title));
   parent.append(d);
   return d;
@@ -236,8 +241,9 @@ function styleEdit(style: Style) {
 function inspector() {
   const panel = $('.lab-inspector');
   panel.replaceChildren();
-  const props = group(panel, 'Properties', true),
+  const props = element('div'),
     n = node();
+  panel.append(props);
   if (n) {
     props.append(element('h3', n.name));
     const tools = element('div');
@@ -256,7 +262,10 @@ function inspector() {
       }),
     );
     props.append(tools);
-    const content = group(props, 'Content & accessibility', true);
+    const content = group(props, 'Content', true);
+    const accessibility = element('details');
+    accessibility.append(element('summary', 'Accessibility'));
+    shell.accordion(accessibility, 'Accessibility');
     field(content, 'Name', n.name, (v) =>
       contentEdit((nn) => {
         nn.name = v;
@@ -293,10 +302,16 @@ function inspector() {
       l.append(ta);
       content.append(l);
       if (n.type === 'heading')
-        numberField(content, 'Heading level', n.content.level, 1, 6, (v) =>
-          contentEdit((nn) => {
-            if (nn.type === 'heading') nn.content.level = v;
-          }),
+        numberField(
+          accessibility,
+          'Heading level',
+          n.content.level,
+          1,
+          6,
+          (v) =>
+            contentEdit((nn) => {
+              if (nn.type === 'heading') nn.content.level = v;
+            }),
         );
     }
     if (n.type === 'button') {
@@ -333,7 +348,7 @@ function inspector() {
         upload.accept = 'image/png,image/jpeg,image/webp,image/gif';
         const label = element('label', 'Upload image (up to 5 MB)');
         label.append(upload);
-        content.append(label);
+        if (!shell.production) content.append(label);
         upload.onchange = () => {
           const file = upload.files?.[0];
           if (!file) return;
@@ -358,12 +373,12 @@ function inspector() {
             });
           })().catch(error);
         };
-        field(content, 'Image alt text', n.content.alt, (v) =>
+        field(accessibility, 'Image alt text', n.content.alt, (v) =>
           contentEdit((nn) => {
             if (nn.type === 'image') nn.content.alt = v;
           }),
         );
-        check(content, 'Decorative image', n.content.decorative, (v) =>
+        check(accessibility, 'Decorative image', n.content.decorative, (v) =>
           contentEdit((nn) => {
             if (nn.type === 'image') {
               nn.content.decorative = v;
@@ -440,15 +455,23 @@ function inspector() {
           }),
         ['rectangle', 'ellipse', 'line'],
       );
-      check(content, 'Decorative shape', n.content.decorative, (v) =>
+      check(accessibility, 'Decorative shape', n.content.decorative, (v) =>
         contentEdit((nn) => {
           if (nn.type === 'shape') nn.content.decorative = v;
         }),
       );
     }
-    props.append(responsiveControls(doc(), n.id, commit));
+    const responsive = responsiveControls(doc(), n.id, commit);
+    responsive.querySelector('summary')!.textContent = 'Responsive';
+    responsive.querySelectorAll(':scope > small').forEach((el) => el.remove());
+    shell.accordion(responsive, 'Responsive');
+    responsive
+      .querySelectorAll('details')
+      .forEach((d) => shell.accordion(d, 'Advanced relationships'));
+    const advanced = responsive.querySelector('details')!;
+    advanced.remove();
     const p = layout().placements[n.id]!,
-      geo = group(props, 'Position & dimensions', true);
+      geo = group(props, 'Position and Size');
     const fields = element('div');
     fields.className = 'lab-fields';
     geo.append(fields);
@@ -492,7 +515,7 @@ function inspector() {
         (v) => geometry({ height: { mode: 'aspect', ratio: v } }),
         0.01,
       );
-    geo.append(
+    responsive.append(
       button(p.hidden ? 'Show on this screen' : 'Hide on this screen', () =>
         commit({
           type: 'SetNodeVisibility',
@@ -503,17 +526,20 @@ function inspector() {
       ),
     );
     if (device !== primaryScreen(doc()))
-      geo.append(
+      responsive.append(
         button('Reset to Auto', () =>
           commit({ type: 'ResetNodeToAuto', id: n.id, device }),
         ),
       );
-    check(geo, 'Locked on this breakpoint', p.locked, (v) =>
+    check(responsive, 'Locked on this breakpoint', p.locked, (v) =>
       commit({ type: 'LockNode', id: n.id, device, value: v }),
     );
-    const styles = group(props, 'Style & crop', true);
+    props.append(responsive);
+    const textStyle = ['heading', 'paragraph', 'button'].includes(n.type);
+    const typography = textStyle ? group(props, 'Typography') : undefined;
+    const styles = group(props, 'Appearance');
     field(
-      styles,
+      responsive,
       'Apply styles to',
       scope === 'all' ? 'All breakpoints' : 'This breakpoint',
       (v) => {
@@ -522,9 +548,10 @@ function inspector() {
       ['This breakpoint', 'All breakpoints'],
     );
     const st = resolved(n, device);
-    field(styles, 'Font family', st.fontFamily ?? '', (v) =>
-      styleEdit({ fontFamily: v }),
-    );
+    if (typography)
+      field(typography, 'Font family', st.fontFamily ?? '', (v) =>
+        styleEdit({ fontFamily: v }),
+      );
     for (const [key, label, min, max, def, step] of [
       ['fontSizePx', 'Font size (px)', 8, 240, 18, 1],
       ['fontWeight', 'Font weight', 100, 900, 400, 100],
@@ -534,9 +561,16 @@ function inspector() {
       ['borderRadiusPx', 'Radius (px)', 0, 999, 0, 1],
       ['paddingPx', 'Padding (px)', 0, 256, 0, 1],
       ['opacity', 'Opacity', 0, 1, 1, 0.05],
-    ] as const)
+    ] as const) {
+      const isType = [
+        'fontSizePx',
+        'fontWeight',
+        'lineHeight',
+        'letterSpacingPx',
+      ].includes(key);
+      if (isType && !typography) continue;
       numberField(
-        styles,
+        isType ? typography! : styles,
         label,
         st[key] ?? def,
         min,
@@ -544,21 +578,28 @@ function inspector() {
         (v) => styleEdit({ [key]: v }),
         step,
       );
+    }
     for (const [key, label] of [
       ['color', 'Text color'],
       ['backgroundColor', 'Fill color'],
       ['borderColor', 'Border color'],
-    ] as const)
-      field(styles, label, st[key] ?? 'transparent', (v) =>
-        styleEdit({ [key]: v }),
+    ] as const) {
+      if (key === 'color' && !typography) continue;
+      field(
+        key === 'color' ? typography! : styles,
+        label,
+        st[key] ?? 'transparent',
+        (v) => styleEdit({ [key]: v }),
       );
-    field(
-      styles,
-      'Text alignment',
-      st.textAlign ?? 'left',
-      (v) => styleEdit({ textAlign: v as Style['textAlign'] }),
-      ['left', 'center', 'right'],
-    );
+    }
+    if (typography)
+      field(
+        typography,
+        'Text alignment',
+        st.textAlign ?? 'left',
+        (v) => styleEdit({ textAlign: v as Style['textAlign'] }),
+        ['left', 'center', 'right'],
+      );
     if (n.type === 'image' || n.type === 'video') {
       field(
         styles,
@@ -584,53 +625,77 @@ function inspector() {
         (v) => styleEdit({ objectPositionY: v }),
       );
     }
+    if (n.type === 'button' || n.type === 'video') {
+      const interaction = group(props, 'Interaction');
+      const labels =
+        n.type === 'button'
+          ? ['Link URL', 'Open in new tab']
+          : ['controls', 'muted', 'autoplay', 'loop'];
+      for (const l of [...content.querySelectorAll('label')])
+        if (labels.includes(l.firstChild?.textContent ?? ''))
+          interaction.append(l);
+    }
+    if (shell.production)
+      for (const l of content.querySelectorAll('label'))
+        if (l.firstChild?.textContent === 'Video URL') l.remove();
+    if (accessibility.children.length > 1) props.append(accessibility);
+    advanced.querySelector('summary')!.textContent = 'Advanced';
+    props.append(advanced);
   } else
     props.append(element('p', 'Add a container or select a layer to edit it.'));
-  const section = group(props, 'Hero section', !n);
-  const height = layout().height;
-  field(
-    section,
-    'Section height',
-    height.mode,
-    (v) =>
-      commit({
-        type: 'SetSectionHeight',
-        device,
-        height:
-          v === 'auto'
-            ? { mode: 'auto', minPx: 640 }
-            : { mode: 'fixed', px: 640 },
-      }),
-    ['auto', 'fixed'],
+  if (!n) {
+    const section = group(props, 'Hero section', true);
+    const height = layout().height;
+    field(
+      section,
+      'Section height',
+      height.mode,
+      (v) =>
+        commit({
+          type: 'SetSectionHeight',
+          device,
+          height:
+            v === 'auto'
+              ? { mode: 'auto', minPx: 640 }
+              : { mode: 'fixed', px: 640 },
+        }),
+      ['auto', 'fixed'],
+    );
+    numberField(
+      section,
+      height.mode === 'auto'
+        ? 'Minimum section height (px)'
+        : 'Section height (px)',
+      height.mode === 'auto' ? height.minPx : height.px,
+      240,
+      4000,
+      (v) =>
+        commit({
+          type: 'SetSectionHeight',
+          device,
+          height:
+            height.mode === 'auto'
+              ? { mode: 'auto', minPx: v }
+              : { mode: 'fixed', px: v },
+        }),
+    );
+  }
+  const structure = $('.lab-structure');
+  structure.replaceChildren(
+    button('Hero section settings', () => {
+      selected = '';
+      render();
+    }),
   );
-  numberField(
-    section,
-    height.mode === 'auto'
-      ? 'Minimum section height (px)'
-      : 'Section height (px)',
-    height.mode === 'auto' ? height.minPx : height.px,
-    240,
-    4000,
-    (v) =>
-      commit({
-        type: 'SetSectionHeight',
-        device,
-        height:
-          height.mode === 'auto'
-            ? { mode: 'auto', minPx: v }
-            : { mode: 'fixed', px: v },
-      }),
-  );
-  const layers = group(panel, 'Layers', true);
-  layers.append(
-    element('small', 'Reading order is independent of visual bands.'),
-  );
+  const layers = group(structure, 'Hero section', true);
+  layers.append(element('small', 'Elements in reading order'));
   const s = doc().sections[0]!;
   for (const [index, id] of s.readingOrder.entries()) {
     const nn = doc().nodes[id]!,
       p = layout().placements[id]!,
       row = element('div');
     row.className = 'lab-layer';
+    row.dataset.layer = id;
     const select = button(
       `${index + 1}. ${nn.name}${p.hidden ? ' · hidden' : ''}${p.locked ? ' · locked' : ''}`,
       () => {
@@ -640,8 +705,9 @@ function inspector() {
     );
     select.setAttribute('aria-pressed', String(id === selected));
     row.append(select);
+    const layerProperties = group(row, 'Layer options');
     field(
-      row,
+      layerProperties,
       'Visual band',
       p.layerBand,
       (v) =>
@@ -654,7 +720,7 @@ function inspector() {
         }),
       nn.type === 'button' ? ['interactive'] : bands,
     );
-    numberField(row, 'Visual order', p.layerOrder, 0, 99, (v) =>
+    numberField(layerProperties, 'Visual order', p.layerOrder, 0, 99, (v) =>
       commit({ type: 'SetLayer', id, device, band: p.layerBand, order: v }),
     );
     const tools = element('div');
@@ -676,18 +742,39 @@ function inspector() {
       button(p.locked ? 'Unlock' : 'Lock', () =>
         commit({ type: 'LockNode', id, device, value: !p.locked }),
       ),
-      button(p.hidden ? 'Show on this screen' : 'Hide on this screen', () =>
+      button((p.hidden ? 'Show ' : 'Hide ') + nn.name + ' on this screen', () =>
         commit({ type: 'SetNodeVisibility', id, device, value: !p.hidden }),
       ),
     );
-    row.append(tools);
+    layerProperties.append(tools);
     layers.append(row);
+  }
+  const assets = $('.lab-assets');
+  assets.replaceChildren(element('h3', 'Media in this document'));
+  const media = Object.values(doc().nodes).filter(
+    (n) => n.type === 'image' || n.type === 'video',
+  );
+  if (!media.length)
+    assets.append(
+      element(
+        'p',
+        'No media added yet. Add an Image or Video container to get started.',
+      ),
+    );
+  for (const n of media) {
+    const asset = doc().assets[n.content.assetId];
+    assets.append(
+      button((asset?.name ?? n.name) + ' · ' + n.name, () => {
+        selected = n.id;
+        render();
+      }),
+    );
   }
 }
 function renderRail() {
   const rail = $('.lab-rail');
   rail.replaceChildren();
-  for (const bp of devices) {
+  for (const bp of ['desktop', 'tablet', 'mobile'] as const) {
     const b = button(names[bp], () => {
       device = bp;
       scope = device;
@@ -704,7 +791,10 @@ function renderRail() {
     r.inert = true;
     r.removeAttribute('id');
     mini.append(r);
-    b.append(mini);
+    const frame = element('div');
+    frame.className = 'lab-device-frame';
+    frame.append(mini);
+    b.append(frame);
     const card = element('div');
     card.className = 'lab-rail-card';
     card.dataset.screen = bp;
@@ -737,15 +827,17 @@ function renderRail() {
       const ps = Object.values(doc().sections[0]!.layouts[bp].placements);
       const auto = ps.filter((p) => p.geometryMode === 'auto').length;
       card.append(
-        element(
-          'small',
-          `${auto} Auto / ${ps.length - auto} Custom - badge describes selected element`,
-        ),
+        element('small', `${auto} Auto / ${ps.length - auto} Custom`),
       );
     }
     rail.append(card);
     const result = measureSection(r, doc(), bp);
-    const k = Math.min((b.clientWidth - 16) / width, 130 / result.height);
+    const available = Math.max(100, $('.lab-left').clientWidth - 64);
+    const k = Math.min(
+      available / width,
+      (bp === 'desktop' ? 170 : 250) / result.height,
+    );
+    mini.style.width = width * k + 'px';
     r.style.transform = `scale(${k})`;
     mini.style.height = result.height * k + 'px';
   }
@@ -753,13 +845,15 @@ function renderRail() {
 function render() {
   const active = document.activeElement;
   const activeLabel = active?.closest('label')?.firstChild?.textContent;
+  const activeLayer =
+    active?.closest<HTMLElement>('[data-layer]')?.dataset.layer;
   const caret =
     active instanceof HTMLTextAreaElement
       ? [active.selectionStart, active.selectionEnd]
       : undefined;
   const scroll = $('.lab-inspector').scrollTop;
   $('#lab-device').textContent = names[device];
-  $('#lab-origin').textContent = layout().origin + ' layout';
+
   $<HTMLButtonElement>('#lab-undo').disabled = !history.past.length;
   $<HTMLButtonElement>('#lab-redo').disabled = !history.future.length;
   renderRail();
@@ -775,6 +869,7 @@ function render() {
     zoom === 'fit'
       ? Math.min(1, Math.max(100, $('.lab-main').clientWidth - 40) / width)
       : Number(zoom);
+  $('#lab-scale').textContent = Math.round(scale * 100) + '%';
   stage.style.width = width + 'px';
   stage.style.height = result.height + 'px';
   stage.style.transform = `scale(${scale})`;
@@ -832,14 +927,20 @@ function render() {
       overlay.append(hit);
     }
   }
-  $('#lab-warning').textContent = result.warnings.join(' ');
+  // Diagnostic output is available in the console, never over the page surface.
+  if (result.warnings.length)
+    console.debug('Editor layout diagnostics', result.warnings);
   inspector();
   $('.lab-inspector').scrollTop = scroll;
   selectionOverlay();
   if (activeLabel) {
-    const label = [...document.querySelectorAll('.lab-inspector label')].find(
-      (l) => l.firstChild?.textContent === activeLabel,
-    );
+    const label = [
+      ...document.querySelectorAll(
+        activeLayer
+          ? '[data-layer="' + activeLayer + '"] label'
+          : '.lab-inspector label',
+      ),
+    ].find((l) => l.firstChild?.textContent === activeLabel);
     const control = label?.querySelector<HTMLElement>('input,textarea,select');
     control?.focus({ preventScroll: true });
     if (caret && control instanceof HTMLTextAreaElement)
