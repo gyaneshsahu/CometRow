@@ -20,11 +20,7 @@ import {
   editorSchemaPlugin,
   campaignLabStoragePlugin,
 } from '../scripts/editor-schema-plugin.js';
-import {
-  newVisualDocument,
-  documentSchema,
-  emptyDocument,
-} from '../src/composer/schema.js';
+import { newVisualDocument, documentSchema } from '../src/composer/schema.js';
 import { renderDocument } from '../src/composer/render.js';
 test('campaign bundle runs the accepted Lab sources with only campaign storage substituted', async () => {
   const result = await build({
@@ -153,8 +149,7 @@ test('production adapter round-trips shared commands, relationships, Custom and 
   h.redo();
   assert.deepEqual(resolveVisual(h.document), saved);
 });
-test('campaign envelope keeps V1 strict and accepts repeatable shared visual sections', () => {
-  assert.equal(documentSchema.parse(emptyDocument()).schemaVersion, 1);
+test('campaign envelope rejects obsolete formats and accepts repeatable visual sections', () => {
   const v = newVisualDocument(randomUUID());
   v.blocks.push(newVisualDocument(randomUUID()).blocks[0]!);
   assert.equal(documentSchema.safeParse(v).success, true);
@@ -196,71 +191,4 @@ test('private preview boots the same renderer from escaped shared document data'
   const html = renderDocument(d, 'nonce');
   assert.match(html, /data-visual-document/);
   assert.match(html, /visual-preview.js/);
-  assert.doesNotMatch(
-    renderDocument(emptyDocument(), 'nonce'),
-    /visual-preview.js/,
-  );
-});
-test('existing recreated V2 draft is adapted without dropping placements, roles or content', () => {
-  const id = randomUUID(),
-    n = randomUUID(),
-    p = {
-      geometryMode: 'custom',
-      x: 50,
-      yPx: 80,
-      w: 300,
-      height: { mode: 'auto', minPx: 44 },
-      layerBand: 'content',
-      layerOrder: 0,
-      hidden: false,
-      locked: false,
-      sectionBackground: false,
-    };
-  const l = {
-    height: { mode: 'auto', minPx: 640 },
-    origin: 'user',
-    placements: { [n]: p },
-  };
-  const r = {
-    height: 640,
-    styles: { [n]: { fontSizePx: 48 } },
-    heights: { [n]: 63 },
-  };
-  const old = {
-    layoutEngineVersion: 'visual/1',
-    primaryScreen: 'desktop',
-    nodes: {
-      [n]: {
-        id: n,
-        name: 'Title',
-        type: 'heading',
-        content: { text: 'Original title', level: 1 },
-        baseStyle: { fontSizePx: 48 },
-        styleOverrides: {},
-      },
-    },
-    section: {
-      id,
-      childIds: [n],
-      readingOrder: [n],
-      bottomPaddingPx: 32,
-      responsive: { roles: { [n]: 'content' }, groups: [] },
-      layouts: { mobile: l, tablet: l, desktop: l },
-    },
-    resolved: { mobile: r, tablet: r, desktop: r },
-  };
-  const value = visualSchema.parse(old);
-  assert.deepEqual(
-    value.document.sections[0]!.layouts.desktop.placements['n' + n],
-    p,
-  );
-  assert.equal(
-    (value.document.nodes['n' + n] as { content: { text: string } }).content
-      .text,
-    'Original title',
-  );
-  assert.equal(
-    value.document.sections[0]!.responsive!.roles['n' + n],
-    'content',
-  );
 });

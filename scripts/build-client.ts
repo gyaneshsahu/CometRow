@@ -8,7 +8,6 @@ await build({
   entryPoints: {
     'visual-preview': 'src/composer/visual/preview-client.ts',
     'campaign-lab': 'src/composer/campaign-lab.ts',
-    composer: 'src/composer/client.ts',
     workspace: 'src/web/workspace-client.ts',
     'workspace-style': 'src/web/workspace.css',
     'campaign-preview': 'src/composer/preview.css',

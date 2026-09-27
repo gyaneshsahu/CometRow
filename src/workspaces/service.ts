@@ -102,8 +102,8 @@ export class WorkspaceService {
     idSchema.parse(campaignId);
     return transaction(this.pool, async (client) => {
       const membership = await this.access(client, actor, workspace);
-      const result = await client.query<Campaign & { visual_editor: boolean }>(
-        "SELECT c.*, coalesce(d.document->>'schemaVersion' = '2', false) AS visual_editor FROM campaigns c LEFT JOIN campaign_drafts d ON d.campaign_id=c.id AND d.workspace_id=c.workspace_id WHERE c.id = $1 AND c.workspace_id = $2 AND c.deleted_at IS NULL",
+      const result = await client.query<Campaign>(
+        'SELECT c.* FROM campaigns c WHERE c.id = $1 AND c.workspace_id = $2 AND c.deleted_at IS NULL',
         [campaignId, workspace],
       );
       if (!result.rows[0]) throw new AppError(404, 'Campaign not found.');
@@ -111,12 +111,7 @@ export class WorkspaceService {
     });
   }
 
-  async createCampaign(
-    actor: string,
-    workspace: string,
-    rawTitle: unknown,
-    visual = true,
-  ) {
+  async createCampaign(actor: string, workspace: string, rawTitle: unknown) {
     const title = titleSchema.parse(rawTitle);
     return transaction(this.pool, async (client) => {
       await this.access(client, actor, workspace, ['owner', 'editor']);
@@ -127,15 +122,7 @@ export class WorkspaceService {
       );
       await client.query(
         'INSERT INTO campaign_drafts (campaign_id, workspace_id, document) VALUES ($1, $2, $3::jsonb)',
-        [
-          id,
-          workspace,
-          JSON.stringify(
-            visual
-              ? newVisualDocument(randomUUID())
-              : { schemaVersion: 1, theme: {}, blocks: [] },
-          ),
-        ],
+        [id, workspace, JSON.stringify(newVisualDocument(randomUUID()))],
       );
       await audit(client, workspace, actor, 'campaign.created', id);
       return id;

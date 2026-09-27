@@ -4,17 +4,15 @@
 
 Publish once. Distribute everywhere. Update anytime. Know what worked.
 
-CometRow is a hosted campaign publishing platform. **Phase 1 is accepted. Phase 2 is not accepted; its UX revision is ready for another founder review. Phase 3 has not begun.** Accounts, workspaces, permissions, campaign management and the responsive campaign composer work locally. Uploads, public publishing, QR codes and analytics remain later phases.
+CometRow uses the accepted Editor Lab as its only page editor. Uploads, publishing, QR codes and analytics remain later work.
 
-Start with the [Phase 2 review guide](docs/PHASE_2_REVIEW.md), [current status](docs/STATUS.md) and [composer security notes](docs/SECURITY_PHASE_2.md).
+See [current status](docs/STATUS.md) and [editor security notes](docs/SECURITY_PHASE_2.md).
 
-For the **latest isolated P0 editor prototype**, run `npx.cmd tsx scripts/editor-p0.ts` and open `http://127.0.0.1:3002` (no login). Read the [founder walkthrough](docs/EDITOR_P0_REVIEW.md), [complete requirement audit](docs/EDITOR_P0_TRACEABILITY.md) and [schema/migration proposal](docs/EDITOR_P0_SCHEMA_DESIGN.md). This review copy has no production connection. Partial requirements remain documented; integration and Phase 3 are not authorized.
+## Open the editor
 
-## Try the composer
+Run `npm run setup`, sign in, create a named campaign and choose **Customize**. Campaigns use the shared Lab canvas and production autosave with no editor selection.
 
-Run `npm run setup`. In a second terminal, run `npm run demo` for test credentials, then `npm run demo:composer` for a populated campaign with all twelve core blocks. Both demo commands preserve existing fixtures. Open the printed composer link after signing in as the demo Owner. Use **Campaign overview → Manage campaign → Duplicate** to experiment on a copy.
-
-The composer uses one versioned document across Phone, Tablet and Desktop previews. Build opens labelled block cards; selecting a block opens focused editing with a contextual preview. Preview campaign shows the complete responsive document. Mobile has explicit All blocks, Next block and Preview this block navigation. Drafts autosave after a short pause. Competing saves require an explicit choice. Media is represented by placeholders and preview links are inactive.
+For standalone development, run `npm run editor:lab` and open `http://127.0.0.1:3002/editor-lab`. Startup seeds create no campaigns; `npm run demo` remains an optional synthetic account/current-campaign fixture.
 
 ## Try the accounts and workspaces
 

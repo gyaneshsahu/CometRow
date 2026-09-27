@@ -51,9 +51,7 @@ body[data-font='editorial'] h2 {
   max-width: 1200px;
   padding: 0;
 }
-.campaign-page:has(.visual-section) > .block:not(.block-visual-section) {
-  padding-inline: 6%;
-}
+
 .block-visual-section {
   padding: 0;
 }
@@ -101,158 +99,7 @@ small {
   font-size: 12px;
   color: var(--muted);
 }
-.eyebrow {
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  font-weight: 700;
-}
-.brand-row {
-  display: flex;
-  gap: 14px;
-  align-items: center;
-}
-.brand-row strong {
-  font-size: 20px;
-}
-.brand-row p {
-  font-size: 12px;
-}
-.logo-slot {
-  display: grid;
-  place-items: center;
-  width: 48px;
-  height: 48px;
-  flex-shrink: 0;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  font-weight: 600;
-}
-.hero-layout {
-  display: grid;
-  gap: 30px;
-  align-items: center;
-}
-.block-hero {
-  padding-block: 45px;
-}
-.hero-layout p {
-  max-width: 560px;
-}
-.media-slot {
-  background: var(--surface);
-  border: 1px dashed var(--line);
-  border-radius: var(--radius);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 24px;
-  text-align: center;
-  width: 100%;
-  overflow-wrap: anywhere;
-}
-.media-slot span {
-  font-size: 40px;
-  color: var(--muted);
-}
-.media-slot strong {
-  font-size: 14px;
-  font-weight: 500;
-}
-.media-slot.landscape {
-  aspect-ratio: 16/9;
-}
-.media-slot.square {
-  aspect-ratio: 1;
-}
-.media-slot.portrait {
-  aspect-ratio: 9/16;
-}
-figcaption {
-  font-size: 12px;
-  color: var(--muted);
-  padding: 10px 0;
-}
-.gallery,
-.benefits,
-.quotes,
-.event-grid {
-  display: grid;
-  gap: 20px;
-}
-.benefits article {
-  background: var(--surface);
-  padding: 26px;
-  border-radius: var(--radius);
-}
-.detail-number {
-  font-size: 12px;
-  letter-spacing: 0.1em;
-  color: var(--muted);
-}
-.benefits p {
-  font-size: 14px;
-}
-.prose {
-  max-width: 760px;
-}
-.prose ul {
-  padding-left: 22px;
-}
-.prose strong {
-  color: inherit;
-}
-.offer-card {
-  padding: 30px;
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-.price {
-  font-size: 40px;
-  line-height: 1.2;
-  display: block;
-  margin-bottom: 14px;
-  letter-spacing: -0.04em;
-}
-.coupon {
-  display: inline-block;
-  padding: 12px 18px;
-  border: 1px dashed var(--line);
-  margin-block: 18px;
-}
-.offer-card small {
-  display: block;
-}
-blockquote {
-  background: var(--surface);
-  border-radius: var(--radius);
-  padding: 28px;
-}
-blockquote > span {
-  font:
-    55px/1 Georgia,
-    serif;
-}
-blockquote footer {
-  margin-top: 24px;
-  font-size: 13px;
-}
-cite {
-  display: block;
-  font-style: normal;
-  font-size: 11px;
-  color: var(--muted);
-}
-.cta-card {
-  text-align: center;
-  padding: 25px 0;
-}
-.cta-card p {
-  max-width: 570px;
-  margin: 0 auto 25px;
-}
+
 button {
   font: inherit;
   font-size: 14px;
@@ -262,43 +109,6 @@ button {
   opacity: 1;
   cursor: default;
   overflow-wrap: anywhere;
-}
-.primary-action {
-  color: var(--on-accent);
-  background: var(--accent);
-  border: 1px solid var(--accent);
-  font-weight: 600;
-}
-.secondary-action {
-  background: transparent;
-  border: 1px solid var(--line);
-  color: inherit;
-}
-.action-list,
-.legal-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-.action-list button {
-  flex: 1;
-  min-width: 140px;
-}
-address {
-  font-style: normal;
-}
-address p {
-  margin-bottom: 12px;
-}
-.campaign-footer p {
-  font-size: 12px;
-}
-.legal-links {
-  margin: 18px 0;
-}
-.legal-links button {
-  font-size: 11px;
-  padding: 7px 10px;
 }
 .empty-campaign {
   padding: 80px 0;
@@ -317,31 +127,10 @@ address p {
   font-size: 10px;
   color: var(--muted);
 }
-.placeholder-copy {
-  font-size: 14px;
-}
+
 @media (min-width: 640px) {
-  .gallery,
-  .quotes,
-  .event-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .benefits {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
   .block {
     padding-block: 45px;
-  }
-}
-@media (min-width: 1000px) {
-  .hero-layout.with-visual {
-    grid-template-columns: 1fr 1fr;
-  }
-  .benefits {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .gallery {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 @media (prefers-reduced-motion: reduce) {

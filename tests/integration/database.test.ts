@@ -8,6 +8,7 @@ import EmbeddedPostgres from '../../scripts/local-postgres.js';
 import { createPool } from '../../src/db/pool.js';
 import { migrate } from '../../src/db/migrate.js';
 import { demoIds, seed } from '../../src/db/seed.js';
+import { newVisualDocument } from '../../src/composer/schema.js';
 import { composerScenarios } from './composer-scenarios.js';
 import { phaseOneScenarios } from './phase-one-scenarios.js';
 
@@ -75,16 +76,25 @@ test('real PostgreSQL foundation', { timeout: 90000 }, async (t) => {
       assert.equal(users.rowCount, 1);
       assert.equal(users.rows[0].email, 'founder@example.test');
       assert.equal(users.rows[0].email_verified_at, null);
-      assert.equal(
-        (await pool.query('SELECT status FROM campaigns')).rows[0].status,
-        'draft',
-      );
+      assert.equal((await pool.query('SELECT * FROM campaigns')).rowCount, 0);
       await assert.rejects(seed(pool, 'production'), /restricted/);
     },
   );
   await t.test(
     'database rejects cross-workspace client and draft references',
     async () => {
+      await pool.query(
+        "INSERT INTO campaigns (id,workspace_id,public_id,title) VALUES ($1,$2,$3,'Constraint fixture')",
+        [demoIds.campaign, demoIds.workspace, demoIds.public],
+      );
+      await pool.query(
+        'INSERT INTO campaign_drafts (campaign_id,workspace_id,document) VALUES ($1,$2,$3::jsonb)',
+        [
+          demoIds.campaign,
+          demoIds.workspace,
+          JSON.stringify(newVisualDocument(randomUUID())),
+        ],
+      );
       const otherWorkspace = randomUUID();
       const client = randomUUID();
       await pool.query(

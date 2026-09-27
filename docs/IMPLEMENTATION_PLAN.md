@@ -1,6 +1,6 @@
 # CometRow implementation plan
 
-Current gate: Phase 0 and Phase 1 accepted. Phase 2 remains unaccepted; its UX revision is ready for another founder review. Do not begin Phase 3 until the founder reviews and authorizes it. Historical foundation planning below is retained as context; current details are in `STATUS.md` and `PHASE_2_REVIEW.md`.
+Current gate: Phase 0 and Phase 1 accepted. Phase 2 remains unaccepted; its UX revision is ready for another founder review. Do not begin Phase 3 until the founder reviews and authorizes it. Historical foundation planning below is retained as context; current details are in `STATUS.md` and `ARCHITECTURE.md`.
 
 ## Scope and interpretation
 

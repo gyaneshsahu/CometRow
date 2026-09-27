@@ -9,13 +9,13 @@ import { buildApp } from '../../src/app.js';
 import { parseConfig } from '../../src/config.js';
 import { digest, token } from '../../src/identity/password.js';
 import { WorkspaceService } from '../../src/workspaces/service.js';
-import { emptyDocument } from '../../src/composer/schema.js';
-import { newBlock } from '../../src/composer/library.js';
+import { newVisualDocument } from '../../src/composer/schema.js';
 
+const emptyDocument = () =>
+  newVisualDocument('12345678-1234-4123-8123-123456789abc');
 export async function composerScenarios(pool: Pool, t: TestContext) {
   const config = parseConfig({
     NODE_ENV: 'test',
-    VISUAL_EDITOR_ENABLED: 'true',
     APP_ORIGIN: 'http://127.0.0.1:3000',
     DATABASE_URL: 'postgresql://localhost/test',
     LOG_LEVEL: 'silent',
@@ -62,12 +62,10 @@ export async function composerScenarios(pool: Pool, t: TestContext) {
     owner!.id,
     workspace,
     'Composer test',
-    false,
   );
   const base = `/w/${workspace}/campaigns/${campaign}`;
   const doc = emptyDocument();
   doc.theme.preset = 'paper';
-  doc.blocks.push(newBlock('brand', randomUUID()));
   await pool.query(
     'UPDATE campaign_drafts SET document=$1::jsonb WHERE campaign_id=$2',
     [JSON.stringify(doc), campaign],
@@ -91,6 +89,36 @@ export async function composerScenarios(pool: Pool, t: TestContext) {
     document,
     mutationId: randomUUID(),
   });
+  await t.test(
+    'removed editor routes and bundles are unavailable',
+    async () => {
+      assert.equal(
+        (await request(owner, undefined, '/compose')).statusCode,
+        404,
+      );
+      for (const url of [
+        '/assets/composer.js',
+        '/assets/composer.css',
+        '/assets/visual-composer.js',
+        '/assets/visual-composer.css',
+      ]) {
+        assert.equal(
+          (await app.inject({ url, headers: { cookie: owner!.cookie } }))
+            .statusCode,
+          404,
+        );
+      }
+      assert.equal(
+        (
+          await request(owner, {
+            ...save(1),
+            document: { schemaVersion: 1, theme: {}, blocks: [] },
+          })
+        ).statusCode,
+        400,
+      );
+    },
+  );
   await t.test(
     'enhanced rename returns a confirmed name, rejects errors and retains authorization',
     async () => {
@@ -136,9 +164,12 @@ export async function composerScenarios(pool: Pool, t: TestContext) {
   await t.test(
     'composer and saved preview require membership and safely boot the document',
     async () => {
-      for (const route of ['/compose', '/preview', '/draft']) {
+      for (const route of ['/customize', '/preview', '/draft']) {
         assert.equal((await request(owner, undefined, route)).statusCode, 200);
-        assert.equal((await request(viewer, undefined, route)).statusCode, 200);
+        assert.equal(
+          (await request(viewer, undefined, route)).statusCode,
+          route === '/customize' ? 302 : 200,
+        );
         assert.equal(
           (await request(outsider, undefined, route)).statusCode,
           404,
@@ -153,8 +184,8 @@ export async function composerScenarios(pool: Pool, t: TestContext) {
           401,
         );
       }
-      const response = await request(owner, undefined, '/compose');
-      assert.match(response.body, /src="\/assets\/composer.js"/);
+      const response = await request(owner, undefined, '/customize');
+      assert.match(response.body, /src="\/assets\/campaign-lab.js"/);
       assert.doesNotMatch(response.body, /visual-composer/);
       assert.match(
         String(response.headers['content-security-policy']),
@@ -165,9 +196,9 @@ export async function composerScenarios(pool: Pool, t: TestContext) {
           'unsafe-inline',
         ),
       );
-      assert.match(
-        (await request(viewer, undefined, '/compose')).body,
-        /"readonly":true/,
+      assert.equal(
+        (await request(viewer, undefined, '/customize')).headers.location,
+        base + '/preview',
       );
     },
   );
@@ -259,7 +290,6 @@ export async function composerScenarios(pool: Pool, t: TestContext) {
         owner!.id,
         workspace,
         'Conflict procedure',
-        false,
       );
       const url = `/w/${workspace}/campaigns/${id}/draft`;
       const send = (input?: object) =>
@@ -320,7 +350,7 @@ export async function composerScenarios(pool: Pool, t: TestContext) {
     },
   );
   await t.test(
-    'default visual editor retains revision safety, private access and legacy compatibility',
+    'default visual editor retains revision safety, private access',
     async () => {
       const headers = {
         cookie: owner!.cookie,
@@ -328,28 +358,6 @@ export async function composerScenarios(pool: Pool, t: TestContext) {
         accept: 'application/json',
       };
       const route = `/w/${workspace}/campaigns`;
-      const disabled = await buildApp(
-        { ...config, VISUAL_EDITOR_ENABLED: false },
-        { pool, mail: { send: async () => {} }, ready: async () => {} },
-      );
-      try {
-        assert.equal(
-          (
-            await disabled.inject({
-              method: 'POST',
-              url: route,
-              headers,
-              payload: {
-                _csrf: owner!.csrf,
-                title: 'Default editor without pilot flag',
-              },
-            })
-          ).statusCode,
-          303,
-        );
-      } finally {
-        await disabled.close();
-      }
       const created = await app.inject({
         method: 'POST',
         url: route,
@@ -381,7 +389,7 @@ export async function composerScenarios(pool: Pool, t: TestContext) {
         String(canvasPage.headers['content-security-policy']),
         /unsafe-eval|unsafe-inline/,
       );
-      for (const suffix of ['/compose', '/customize?review=1']) {
+      for (const suffix of ['/customize?review=1']) {
         const redirected = await app.inject({
           method: 'GET',
           url: visualBase + suffix,
@@ -418,10 +426,6 @@ export async function composerScenarios(pool: Pool, t: TestContext) {
           })
         ).statusCode,
         401,
-      );
-      assert.equal(
-        (await request(owner, undefined, '/customize')).headers.location,
-        `/w/${workspace}/campaigns/${campaign}/compose`,
       );
       const snapshot = (
         await app.inject({ method: 'GET', url: visualBase + '/draft', headers })
@@ -504,17 +508,6 @@ export async function composerScenarios(pool: Pool, t: TestContext) {
         ).statusCode,
         400,
       );
-      const legacy = (await request()).json();
-      assert.equal(
-        (
-          await request(owner, {
-            revision: legacy.revision,
-            mutationId: randomUUID(),
-            document: snapshot.document,
-          })
-        ).statusCode,
-        409,
-      );
       const second = structuredClone(payload);
       second.revision = 2;
       second.mutationId = randomUUID();
@@ -584,97 +577,13 @@ export async function composerScenarios(pool: Pool, t: TestContext) {
     },
   );
   await t.test(
-    'empty V1 campaigns open Lab without mutation and upgrade safely on their first save',
-    async () => {
-      const id = await spaces.createCampaign(
-        owner!.id,
-        workspace,
-        'Empty V1',
-        false,
-      );
-      const url = `/w/${workspace}/campaigns/${id}`;
-      const headers = {
-        cookie: owner!.cookie,
-        origin: config.APP_ORIGIN,
-        accept: 'application/json',
-      };
-      assert.equal(
-        (await app.inject({ url: url + '/compose', headers })).headers.location,
-        url + '/customize',
-      );
-      const page = await app.inject({ url: url + '/customize', headers });
-      assert.equal(page.statusCode, 200);
-      assert.match(page.body, /campaign-lab.js/);
-      const boot = JSON.parse(
-        page.body.match(
-          /<script id="composer-data" type="application\/json">(.*?)<\/script>/s,
-        )![1]!,
-      );
-      assert.equal(boot.document.schemaVersion, 2);
-      assert.equal(
-        (await app.inject({ url: url + '/draft', headers })).json().document
-          .schemaVersion,
-        1,
-      );
-      const block = boot.document.blocks[0];
-      block.data = resolveVisual(
-        execute(block.data.document, {
-          type: 'AddNode',
-          node: createNode('heading', 'n' + randomUUID()),
-          placement: placement('heading'),
-          device: 'desktop',
-        }),
-      );
-      const payload = {
-        _csrf: owner!.csrf,
-        revision: boot.revision,
-        mutationId: randomUUID(),
-        document: boot.document,
-      };
-      const saved = await app.inject({
-        method: 'POST',
-        url: url + '/draft',
-        headers,
-        payload,
-      });
-      assert.equal(saved.statusCode, 200);
-      assert.equal(saved.json().revision, 2);
-      assert.deepEqual(
-        (await app.inject({ url: url + '/draft', headers })).json().document,
-        boot.document,
-      );
-      assert.equal(
-        (
-          await app.inject({
-            method: 'POST',
-            url: url + '/draft',
-            headers,
-            payload,
-          })
-        ).json().revision,
-        2,
-      );
-      assert.equal(
-        (
-          await app.inject({
-            method: 'POST',
-            url: url + '/draft',
-            headers,
-            payload: { ...payload, mutationId: randomUUID() },
-          })
-        ).statusCode,
-        409,
-      );
-    },
-  );
-  await t.test(
     'archived drafts are read-only; deleted campaigns and expired sessions cannot access content',
     async () => {
       await spaces.mutateCampaign(owner!.id, workspace, campaign, 'archive');
       assert.equal((await request(owner, save(3))).statusCode, 409);
-      assert.match(
-        (await request(owner, undefined, '/compose')).body,
-        /"readonly":true/,
+      assert.equal(
+        (await request(owner, undefined, '/customize')).headers.location,
+        base + '/preview',
       );
       await pool.query(
         "UPDATE campaigns SET status='deleted',deleted_at=now(),deleted_from_status='archived' WHERE id=$1",

@@ -15,7 +15,6 @@ import {
   estimateText,
   type TextMeasure,
 } from '../../../docs/prototypes/editor-p0/lab-auto-layout.js';
-import { legacySchema } from './legacy-document.js';
 export {
   createNode,
   placement,
@@ -68,98 +67,6 @@ export function createVisual(id: string): VisualData {
   d.sections[0]!.id = 's' + id;
   return resolveVisual(d);
 }
-function upgradeLegacy(value: unknown): unknown {
-  const parsed = legacySchema.safeParse(value);
-  if (!parsed.success) return value;
-  const old = parsed.data,
-    d = seed();
-  const ids = new Map(
-    [
-      ...Object.keys(old.nodes),
-      ...(old.section.responsive?.groups.map((g) => g.id) ?? []),
-    ].map((id) => [id, 'n' + id]),
-  );
-  const mapped = (id: string) => ids.get(id) ?? id;
-  const keys = <T>(record: Record<string, T>) =>
-    Object.fromEntries(
-      Object.entries(record).map(([id, v]) => [mapped(id), v]),
-    );
-  d.documentId = 'c' + old.section.id;
-  d.name = 'Campaign';
-  d.primaryScreen = old.primaryScreen;
-  d.sections = [
-    {
-      ...structuredClone(old.section),
-      id: 's' + old.section.id,
-      kind: 'freeform',
-      name: 'Hero',
-    },
-  ];
-  const section = d.sections[0]!;
-  section.childIds = section.childIds.map(mapped);
-  section.readingOrder = section.readingOrder.map(mapped);
-  if (section.responsive) {
-    section.responsive.roles = keys(section.responsive.roles);
-    section.responsive.groups = section.responsive.groups.map((g) => ({
-      ...g,
-      id: mapped(g.id),
-      children: g.children.map(mapped),
-    }));
-  }
-  for (const b of devices)
-    section.layouts[b].placements = keys(section.layouts[b].placements);
-  for (const [oldId, original] of Object.entries(old.nodes)) {
-    const id = mapped(oldId),
-      n = { ...original, id };
-    if (n.type === 'image')
-      d.nodes[id] = {
-        ...n,
-        content: {
-          ...n.content,
-          alt: n.content.decorative ? '' : n.content.alt,
-          assetId: 'sample-image',
-        },
-      };
-    else if (n.type === 'video')
-      d.nodes[id] = {
-        ...n,
-        content: {
-          assetId: 'sample-video',
-          controls: true,
-          muted: true,
-          autoplay: false,
-          loop: false,
-        },
-      };
-    else if (n.type === 'button')
-      d.nodes[id] = {
-        ...n,
-        content: {
-          ...n.content,
-          action: n.content.action.value
-            ? n.content.action
-            : { kind: 'section', value: 's' + old.section.id },
-        },
-      };
-    else d.nodes[id] = n;
-  }
-  validate(d);
-  // Existing recreated-editor drafts retain every authored placement, relationship
-  // and saved appearance; no database or V1 conversion is performed.
-  const snapshots = {} as VisualData['resolved'];
-  for (const b of devices)
-    snapshots[b] = {
-      width: d.breakpoints[b].previewWidthPx,
-      height: old.resolved[b].height,
-      layout: structuredClone(section.layouts[b]),
-      styles: keys(structuredClone(old.resolved[b].styles)),
-    };
-  return {
-    layoutEngineVersion: ENGINE_VERSION,
-    document: d,
-    resolved: snapshots,
-  };
-}
 function check(value: unknown): value is VisualData {
   try {
     if (!value || typeof value !== 'object') return false;
@@ -203,11 +110,8 @@ function check(value: unknown): value is VisualData {
     return false;
   }
 }
-export const visualSchema = z.preprocess(
-  upgradeLegacy,
-  z.custom<VisualData>(
-    check,
-    'Invalid shared editor document or resolved layouts.',
-  ),
+export const visualSchema = z.custom<VisualData>(
+  check,
+  'Invalid shared editor document or resolved layouts.',
 );
 export const visualShape = visualSchema;

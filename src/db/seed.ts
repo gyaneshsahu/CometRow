@@ -26,14 +26,6 @@ export async function seed(pool: Pool, environment: string) {
       "INSERT INTO memberships (workspace_id, user_id, role) VALUES ($1, $2, 'owner') ON CONFLICT DO NOTHING",
       [demoIds.workspace, demoIds.user],
     );
-    await client.query(
-      "INSERT INTO campaigns (id, workspace_id, public_id, title) VALUES ($1, $2, $3, 'Berlin creative evenings') ON CONFLICT (id) DO NOTHING",
-      [demoIds.campaign, demoIds.workspace, demoIds.public],
-    );
-    await client.query(
-      'INSERT INTO campaign_drafts (campaign_id, workspace_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-      [demoIds.campaign, demoIds.workspace],
-    );
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');

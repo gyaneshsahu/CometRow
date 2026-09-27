@@ -29,7 +29,6 @@
     "build:client": "tsx scripts/build-client.ts",
     "presetup": "npm run build:client",
     "predev": "npm run build:client",
-    "demo:composer": "tsx scripts/demo-composer.ts",
     "editor:lab": "tsx scripts/editor-p0.ts",
     "test:editor-lab": "tsx --test docs/prototypes/editor-p0/lab-*.test.ts",
     "typecheck:editor-lab": "tsc -p docs/prototypes/editor-p0/tsconfig.lab.json"

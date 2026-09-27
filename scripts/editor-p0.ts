@@ -3,13 +3,6 @@ import { readFile } from 'node:fs/promises';
 import { build } from 'esbuild';
 import { fileURLToPath } from 'node:url';
 const root = new URL('../docs/prototypes/editor-p0/', import.meta.url);
-const bundle = await build({
-  entryPoints: [fileURLToPath(new URL('app.ts', root))],
-  bundle: true,
-  write: false,
-  format: 'esm',
-  target: 'es2022',
-});
 const labBundle = await build({
   entryPoints: [fileURLToPath(new URL('lab-app.ts', root))],
   bundle: true,
@@ -30,9 +23,7 @@ const paths = new Map([
   ['/lab.css', ['text/css', new URL('lab.css', root)]],
   ['/lab/sample.svg', ['image/svg+xml', new URL('lab-sample.svg', root)]],
   ['/lab/sample.webm', ['video/webm', new URL('lab-sample.webm', root)]],
-  ['/', ['text/html', new URL('index.html', root)]],
   ['/styles.css', ['text/css', new URL('styles.css', root)]],
-  ['/canvas.css', ['text/css', new URL('canvas.css', root)]],
   [
     '/brand.css',
     ['text/css', new URL('../src/web/design-tokens.css', import.meta.url)],
@@ -45,11 +36,6 @@ createServer(async (req, res) => {
   res.setHeader('Referrer-Policy', 'no-referrer');
   if (req.method !== 'GET') {
     res.writeHead(405).end();
-    return;
-  }
-  if (req.url === '/app.js') {
-    res.writeHead(200, { 'Content-Type': 'text/javascript' });
-    res.end(bundle.outputFiles[0]!.text);
     return;
   }
   if (req.url === '/lab.js') {
