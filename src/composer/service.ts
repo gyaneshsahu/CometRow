@@ -65,6 +65,26 @@ export class ComposerService {
           'Return this campaign to drafts before editing.',
         );
       const document = documentSchema.parse(input.document);
+      const startsVisualDraft =
+        current.document.schemaVersion === 1 &&
+        current.document.blocks.length === 0 &&
+        document.schemaVersion === 2;
+      if (
+        document.schemaVersion !== current.document.schemaVersion &&
+        !startsVisualDraft
+      )
+        throw new AppError(
+          409,
+          'Changing campaign document versions is not supported.',
+        );
+      if (
+        document.schemaVersion === 2 &&
+        document.blocks.filter((b) => b.type === 'visual-section').length > 1
+      )
+        throw new AppError(
+          400,
+          'This pilot supports one visual hero per campaign.',
+        );
       const hash = createHash('sha256')
         .update(JSON.stringify(document))
         .digest('hex');

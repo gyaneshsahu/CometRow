@@ -47,6 +47,16 @@ body[data-font='editorial'] h2 {
   margin: auto;
   padding: 0 6%;
 }
+.campaign-page:has(.shared-visual-preview) {
+  max-width: 1200px;
+  padding: 0;
+}
+.campaign-page:has(.visual-section) > .block:not(.block-visual-section) {
+  padding-inline: 6%;
+}
+.block-visual-section {
+  padding: 0;
+}
 .block {
   padding: 34px 0;
   overflow-wrap: anywhere;

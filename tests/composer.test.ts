@@ -76,7 +76,7 @@ test('every configured core block has valid defaults and renders in one document
 test('schema rejects future versions, unknown configuration, duplicate IDs and resource excess', () => {
   const doc = emptyDocument();
   assert.equal(
-    documentSchema.safeParse({ ...doc, schemaVersion: 2 }).success,
+    documentSchema.safeParse({ ...doc, schemaVersion: 3 }).success,
     false,
   );
   assert.equal(

@@ -10,7 +10,8 @@
     "skipLibCheck": true,
     "outDir": "dist",
     "rootDir": ".",
-    "sourceMap": true
+    "sourceMap": true,
+    "resolveJsonModule": true
   },
   "include": ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"]
 }

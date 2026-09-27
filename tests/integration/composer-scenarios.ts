@@ -1,3 +1,6 @@
+import { createNode, placement } from '../../src/composer/visual/document.js';
+import { execute } from '../../docs/prototypes/editor-p0/lab-commands.js';
+import { resolveVisual } from '../../src/composer/visual/document.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import type { TestContext } from 'node:test';
@@ -7,10 +10,12 @@ import { parseConfig } from '../../src/config.js';
 import { digest, token } from '../../src/identity/password.js';
 import { WorkspaceService } from '../../src/workspaces/service.js';
 import { emptyDocument } from '../../src/composer/schema.js';
+import { newBlock } from '../../src/composer/library.js';
 
 export async function composerScenarios(pool: Pool, t: TestContext) {
   const config = parseConfig({
     NODE_ENV: 'test',
+    VISUAL_EDITOR_ENABLED: 'true',
     APP_ORIGIN: 'http://127.0.0.1:3000',
     DATABASE_URL: 'postgresql://localhost/test',
     LOG_LEVEL: 'silent',
@@ -57,10 +62,16 @@ export async function composerScenarios(pool: Pool, t: TestContext) {
     owner!.id,
     workspace,
     'Composer test',
+    false,
   );
   const base = `/w/${workspace}/campaigns/${campaign}`;
   const doc = emptyDocument();
   doc.theme.preset = 'paper';
+  doc.blocks.push(newBlock('brand', randomUUID()));
+  await pool.query(
+    'UPDATE campaign_drafts SET document=$1::jsonb WHERE campaign_id=$2',
+    [JSON.stringify(doc), campaign],
+  );
   const request = (
     actor = owner!,
     input?: unknown,
@@ -143,6 +154,8 @@ export async function composerScenarios(pool: Pool, t: TestContext) {
         );
       }
       const response = await request(owner, undefined, '/compose');
+      assert.match(response.body, /src="\/assets\/composer.js"/);
+      assert.doesNotMatch(response.body, /visual-composer/);
       assert.match(
         String(response.headers['content-security-policy']),
         /script-src 'self'/,
@@ -246,6 +259,7 @@ export async function composerScenarios(pool: Pool, t: TestContext) {
         owner!.id,
         workspace,
         'Conflict procedure',
+        false,
       );
       const url = `/w/${workspace}/campaigns/${id}/draft`;
       const send = (input?: object) =>
@@ -303,6 +317,354 @@ export async function composerScenarios(pool: Pool, t: TestContext) {
       );
       assert.equal((await request(editor)).statusCode, 404);
       assert.equal((await request(editor, save(3))).statusCode, 404);
+    },
+  );
+  await t.test(
+    'default visual editor retains revision safety, private access and legacy compatibility',
+    async () => {
+      const headers = {
+        cookie: owner!.cookie,
+        origin: config.APP_ORIGIN,
+        accept: 'application/json',
+      };
+      const route = `/w/${workspace}/campaigns`;
+      const disabled = await buildApp(
+        { ...config, VISUAL_EDITOR_ENABLED: false },
+        { pool, mail: { send: async () => {} }, ready: async () => {} },
+      );
+      try {
+        assert.equal(
+          (
+            await disabled.inject({
+              method: 'POST',
+              url: route,
+              headers,
+              payload: {
+                _csrf: owner!.csrf,
+                title: 'Default editor without pilot flag',
+              },
+            })
+          ).statusCode,
+          303,
+        );
+      } finally {
+        await disabled.close();
+      }
+      const created = await app.inject({
+        method: 'POST',
+        url: route,
+        headers,
+        payload: {
+          _csrf: owner!.csrf,
+          title: 'Visual integration',
+        },
+      });
+      assert.equal(created.statusCode, 303);
+      const visualBase = String(created.headers.location);
+      const overview = (
+        await app.inject({ method: 'GET', url: visualBase, headers })
+      ).body;
+      assert.ok(overview.includes(`href="${visualBase}/customize"`));
+      assert.doesNotMatch(overview, /3002|editor-lab/);
+      const canvasPage = await app.inject({
+        method: 'GET',
+        url: visualBase + '/customize',
+        headers,
+      });
+      assert.equal(canvasPage.statusCode, 200);
+      assert.match(canvasPage.body, /src="\/assets\/campaign-lab.js"/);
+      assert.match(canvasPage.body, /href="\/assets\/campaign-lab.css"/);
+      assert.match(canvasPage.body, /<div id="lab"><\/div>/);
+      assert.match(canvasPage.body, /Visual integration/);
+      assert.doesNotMatch(canvasPage.body, /iframe|visual-composer|3002/);
+      assert.doesNotMatch(
+        String(canvasPage.headers['content-security-policy']),
+        /unsafe-eval|unsafe-inline/,
+      );
+      for (const suffix of ['/compose', '/customize?review=1']) {
+        const redirected = await app.inject({
+          method: 'GET',
+          url: visualBase + suffix,
+          headers,
+        });
+        assert.equal(redirected.headers.location, visualBase + '/customize');
+      }
+      assert.equal(
+        (
+          await app.inject({
+            method: 'GET',
+            url: visualBase + '/customize',
+            headers: { ...headers, cookie: viewer!.cookie },
+          })
+        ).headers.location,
+        visualBase + '/preview',
+      );
+      assert.equal(
+        (
+          await app.inject({
+            method: 'GET',
+            url: visualBase + '/customize',
+            headers: { ...headers, cookie: outsider!.cookie },
+          })
+        ).statusCode,
+        404,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            method: 'GET',
+            url: visualBase + '/customize',
+            headers: { accept: 'application/json' },
+          })
+        ).statusCode,
+        401,
+      );
+      assert.equal(
+        (await request(owner, undefined, '/customize')).headers.location,
+        `/w/${workspace}/campaigns/${campaign}/compose`,
+      );
+      const snapshot = (
+        await app.inject({ method: 'GET', url: visualBase + '/draft', headers })
+      ).json();
+      assert.equal(snapshot.document.schemaVersion, 2);
+      const block = snapshot.document.blocks[0];
+      block.data = resolveVisual(
+        execute(block.data.document, {
+          type: 'AddNode',
+          node: createNode('heading', 'n' + randomUUID()),
+          placement: placement('heading'),
+          device: 'desktop',
+        }),
+      );
+      const key = block.data.document.sections[0].childIds[0];
+      block.data = resolveVisual(
+        execute(block.data.document, {
+          type: 'MoveNode',
+          id: key,
+          device: 'mobile',
+          placement: {
+            ...block.data.document.sections[0].layouts.mobile.placements[key],
+            x: 20,
+            w: 400,
+            yPx: 200,
+          },
+        }),
+      );
+      block.data = resolveVisual(
+        execute(block.data.document, {
+          type: 'SetResponsiveRelationships',
+          relationships: { groups: [], roles: { [key]: 'content' } },
+        }),
+      );
+      const payload = {
+        _csrf: owner!.csrf,
+        revision: 1,
+        mutationId: randomUUID(),
+        document: snapshot.document,
+      };
+      const post = () =>
+        app.inject({
+          method: 'POST',
+          url: visualBase + '/draft',
+          headers,
+          payload,
+        });
+      assert.equal((await post()).statusCode, 200);
+      assert.equal((await post()).json().revision, 2);
+      assert.deepEqual(
+        (
+          await app.inject({
+            method: 'GET',
+            url: visualBase + '/draft',
+            headers,
+          })
+        ).json().document,
+        snapshot.document,
+      );
+      const conflict = await app.inject({
+        method: 'POST',
+        url: visualBase + '/draft',
+        headers,
+        payload: { ...payload, mutationId: randomUUID() },
+      });
+      assert.equal(conflict.statusCode, 409);
+      assert.deepEqual(conflict.json().latest.document, snapshot.document);
+      const invalid = structuredClone(payload);
+      invalid.revision = 2;
+      invalid.mutationId = randomUUID();
+      delete invalid.document.blocks[0].data.resolved.mobile.styles[key];
+      assert.equal(
+        (
+          await app.inject({
+            method: 'POST',
+            url: visualBase + '/draft',
+            headers,
+            payload: invalid,
+          })
+        ).statusCode,
+        400,
+      );
+      const legacy = (await request()).json();
+      assert.equal(
+        (
+          await request(owner, {
+            revision: legacy.revision,
+            mutationId: randomUUID(),
+            document: snapshot.document,
+          })
+        ).statusCode,
+        409,
+      );
+      const second = structuredClone(payload);
+      second.revision = 2;
+      second.mutationId = randomUUID();
+      second.document.blocks.push({
+        ...structuredClone(block),
+        id: randomUUID(),
+      });
+      second.document.blocks[1].data.document.sections[0].id =
+        's' + second.document.blocks[1].id;
+      assert.equal(
+        (
+          await app.inject({
+            method: 'POST',
+            url: visualBase + '/draft',
+            headers,
+            payload: second,
+          })
+        ).statusCode,
+        400,
+      );
+      const preview = await app.inject({
+        method: 'GET',
+        url: visualBase + '/preview',
+        headers,
+      });
+      assert.equal(preview.statusCode, 200);
+      assert.match(preview.body, /data-visual-document/);
+      assert.ok(
+        preview.body.includes(block.data.document.nodes[key].content.text),
+      );
+      for (const actor of [viewer!, outsider!]) {
+        const response = await app.inject({
+          method: 'POST',
+          url: visualBase + '/draft',
+          headers: { ...headers, cookie: actor.cookie },
+          payload: { ...payload, _csrf: actor.csrf },
+        });
+        assert.ok([403, 404].includes(response.statusCode));
+      }
+      assert.equal(
+        (
+          await app.inject({
+            method: 'GET',
+            url: visualBase + '/preview',
+            headers: { ...headers, cookie: outsider!.cookie },
+          })
+        ).statusCode,
+        404,
+      );
+      await spaces.mutateCampaign(
+        owner!.id,
+        workspace,
+        visualBase.split('/').at(-1)!,
+        'archive',
+      );
+      assert.equal(
+        (
+          await app.inject({
+            method: 'GET',
+            url: visualBase + '/customize',
+            headers,
+          })
+        ).headers.location,
+        visualBase + '/preview',
+      );
+      assert.equal((await post()).statusCode, 409);
+    },
+  );
+  await t.test(
+    'empty V1 campaigns open Lab without mutation and upgrade safely on their first save',
+    async () => {
+      const id = await spaces.createCampaign(
+        owner!.id,
+        workspace,
+        'Empty V1',
+        false,
+      );
+      const url = `/w/${workspace}/campaigns/${id}`;
+      const headers = {
+        cookie: owner!.cookie,
+        origin: config.APP_ORIGIN,
+        accept: 'application/json',
+      };
+      assert.equal(
+        (await app.inject({ url: url + '/compose', headers })).headers.location,
+        url + '/customize',
+      );
+      const page = await app.inject({ url: url + '/customize', headers });
+      assert.equal(page.statusCode, 200);
+      assert.match(page.body, /campaign-lab.js/);
+      const boot = JSON.parse(
+        page.body.match(
+          /<script id="composer-data" type="application\/json">(.*?)<\/script>/s,
+        )![1]!,
+      );
+      assert.equal(boot.document.schemaVersion, 2);
+      assert.equal(
+        (await app.inject({ url: url + '/draft', headers })).json().document
+          .schemaVersion,
+        1,
+      );
+      const block = boot.document.blocks[0];
+      block.data = resolveVisual(
+        execute(block.data.document, {
+          type: 'AddNode',
+          node: createNode('heading', 'n' + randomUUID()),
+          placement: placement('heading'),
+          device: 'desktop',
+        }),
+      );
+      const payload = {
+        _csrf: owner!.csrf,
+        revision: boot.revision,
+        mutationId: randomUUID(),
+        document: boot.document,
+      };
+      const saved = await app.inject({
+        method: 'POST',
+        url: url + '/draft',
+        headers,
+        payload,
+      });
+      assert.equal(saved.statusCode, 200);
+      assert.equal(saved.json().revision, 2);
+      assert.deepEqual(
+        (await app.inject({ url: url + '/draft', headers })).json().document,
+        boot.document,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            method: 'POST',
+            url: url + '/draft',
+            headers,
+            payload,
+          })
+        ).json().revision,
+        2,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            method: 'POST',
+            url: url + '/draft',
+            headers,
+            payload: { ...payload, mutationId: randomUUID() },
+          })
+        ).statusCode,
+        409,
+      );
     },
   );
   await t.test(

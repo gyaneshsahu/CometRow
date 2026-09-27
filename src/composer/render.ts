@@ -51,6 +51,8 @@ const slot = (kind: string, ratio: string, alt: string, caption = '') =>
 
 function renderBlock(block: ContentBlock): string {
   switch (block.type) {
+    case 'visual-section':
+      return `<div class="shared-visual-preview"></div><script type="application/json" data-visual-document>${JSON.stringify(block.data).replaceAll('<', '\\u003c')}</script>`;
     case 'brand':
       return `<div class="brand-row">${block.data.logo ? `<span class="logo-slot" aria-label="Logo placeholder">${escape(block.data.name.slice(0, 2).toUpperCase() || '◇')}</span>` : ''}<div><strong>${escape(block.data.name || 'Your brand')}</strong>${paragraph(block.data.tagline)}</div></div>`;
     case 'hero':
@@ -93,5 +95,5 @@ export function renderDocument(
       )
       .join('') ||
     '<div class="empty-campaign"><span aria-hidden="true">✳</span><h1>A little space.<br>A lot of possibility.</h1><p>Add your first block to start telling your story.</p></div>'
-  }</main><div class="preview-note">Private draft preview · Links are inactive · Nothing is published</div></body></html>`;
+  }</main>${doc.schemaVersion === 2 ? `<link rel="stylesheet" href="${escape(cssUrl.startsWith('http') ? new URL('/assets/visual-preview.css', cssUrl).href : '/assets/visual-preview.css')}"><script type="module" src="${escape(cssUrl.startsWith('http') ? new URL('/assets/visual-preview.js', cssUrl).href : '/assets/visual-preview.js')}"></script>` : ''}<div class="preview-note">Private draft preview · Links are inactive · Nothing is published</div></body></html>`;
 }

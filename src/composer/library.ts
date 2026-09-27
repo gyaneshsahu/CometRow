@@ -309,7 +309,18 @@ export const blockLibrary: BlockDefinition[] = [
   },
 ];
 export const definition = (type: BlockType) =>
-  blockLibrary.find((entry) => entry.type === type)!;
+  type === 'visual-section'
+    ? {
+        type,
+        name: 'Visual hero',
+        description:
+          'Freely arrange your hero. Phone and Tablet follow Primary unless customized.',
+        fields: [],
+        defaults: {},
+        icon: '',
+        group: 'Introduction',
+      }
+    : blockLibrary.find((entry) => entry.type === type)!;
 export function newBlock(type: BlockType, id: string): ContentBlock {
   return {
     id,

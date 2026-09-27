@@ -10,6 +10,10 @@ export function loadEnvironment() {
 }
 
 const schema = z.object({
+  VISUAL_EDITOR_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
   NODE_ENV: z
     .enum(['development', 'test', 'production'])
     .default('development'),

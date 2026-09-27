@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { visualSchema, createVisual } from './visual/document.js';
 import { pilotLimits } from '../shared/limits.js';
 
 export const themeSchema = z.strictObject({
@@ -107,12 +108,31 @@ export const blockSchema = z.discriminatedUnion('type', [
     note: text(500),
   }),
 ]);
-export const documentShape = z.strictObject({
+export const legacyDocumentShape = z.strictObject({
   schemaVersion: z.literal(1),
   theme: themeSchema,
   blocks: z.array(blockSchema).max(pilotLimits.blocksPerCampaign),
 });
-export type CampaignDocument = z.infer<typeof documentShape>;
+export const visualBlockSchema = z.strictObject({
+  ...common,
+  type: z.literal('visual-section'),
+  data: visualSchema,
+});
+export const documentShape = z.discriminatedUnion('schemaVersion', [
+  legacyDocumentShape,
+  z.strictObject({
+    schemaVersion: z.literal(2),
+    theme: themeSchema,
+    blocks: z
+      .array(z.union([blockSchema, visualBlockSchema]))
+      .max(pilotLimits.blocksPerCampaign),
+  }),
+]);
+export type CampaignDocument = {
+  schemaVersion: 1 | 2;
+  theme: z.infer<typeof themeSchema>;
+  blocks: (z.infer<typeof blockSchema> | z.infer<typeof visualBlockSchema>)[];
+};
 export type ContentBlock = CampaignDocument['blocks'][number];
 export type BlockType = ContentBlock['type'];
 export type Theme = CampaignDocument['theme'];
@@ -169,6 +189,17 @@ export const documentSchema = documentShape.superRefine((doc, ctx) => {
               : 'Use a complete http:// or https:// link without spaces or credentials.',
         );
     };
+    if (entry.type === 'visual-section') {
+      if (entry.data.document.sections[0]!.id !== 's' + entry.id)
+        add(
+          [...path, 'section', 'id'],
+          'Visual section identity must match its block.',
+        );
+      for (const node of Object.values(entry.data.document.nodes)) {
+        images += Number(node.type === 'image');
+        videos += Number(node.type === 'video');
+      }
+    }
     if (entry.type === 'hero') {
       images += Number(entry.data.visual === 'image');
       videos += Number(entry.data.visual === 'video');
@@ -246,3 +277,11 @@ export const documentSchema = documentShape.superRefine((doc, ctx) => {
 export const emptyDocument = (): CampaignDocument =>
   documentSchema.parse({ schemaVersion: 1, theme: {}, blocks: [] });
 export type DraftSnapshot = { document: CampaignDocument; revision: number };
+
+export const newVisualDocument = (id: string): CampaignDocument => ({
+  schemaVersion: 2,
+  theme: themeSchema.parse({}),
+  blocks: [
+    { id, enabled: true, type: 'visual-section', data: createVisual(id) },
+  ],
+});

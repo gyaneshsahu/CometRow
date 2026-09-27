@@ -1,0 +1,12 @@
+html,
+body {
+  height: auto;
+  overflow: auto;
+}
+.shared-visual-preview {
+  width: 100%;
+  min-width: 0;
+}
+.shared-visual-preview .lab-section {
+  overflow: hidden;
+}
